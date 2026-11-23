@@ -1,5 +1,5 @@
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
-import { openPdf } from './pdfjs'
+import { closePdf, openPdf } from './pdfjs'
 import { TaskQueue, isAbortError } from '@/lib/performance/task-queue'
 import { LRUCache } from '@/lib/performance/lru'
 import { getProfile, onProfileChange } from '@/lib/performance/profile'
@@ -44,7 +44,7 @@ export async function releaseDocument(id: string) {
   if (p) {
     try {
       const d = await p
-      await d.destroy()
+      await closePdf(d)
     } catch {
       /* ignore */
     }

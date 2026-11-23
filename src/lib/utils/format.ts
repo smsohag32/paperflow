@@ -49,6 +49,7 @@ export function withSuffix(name: string, suffix: string, ext?: string) {
 /** Make a string safe to use as a filename on all platforms. */
 export function sanitizeFileName(name: string, fallback = 'document') {
   const cleaned = name
+    // eslint-disable-next-line no-control-regex
     .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-')
     .replace(/\s+/g, ' ')
     .trim()

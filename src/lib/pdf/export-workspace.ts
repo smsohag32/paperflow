@@ -2,7 +2,7 @@ import { degrees, rgb, StandardFonts, type PDFDocument, type PDFFont, type PDFPa
 import type { Annotation, FontFamily, WorkspaceDoc, WorkspacePage } from '@/types/workspace'
 import { loadPdfDoc, loadPdfLib, savePdf } from './pdflib'
 import { getAsset, getLibraryBlob } from '@/lib/storage/repo'
-import { openPdf } from './pdfjs'
+import { closePdf, openPdf } from './pdfjs'
 import { parsePageRange } from './page-range'
 
 function hexToRgb(hex?: string) {
@@ -41,6 +41,7 @@ function pickFont(family: FontFamily, bold?: boolean, italic?: boolean) {
  */
 function safeWinAnsi(text: string): string {
   // Standard PDF WinAnsi covers printable ASCII + Latin-1 supplement (0x20-0xFF)
+  // eslint-disable-next-line no-control-regex
   return text.replace(/[^\x09\x0a\x0d\x20-\x7e\xa0-\xff]/g, '?')
 }
 
@@ -82,7 +83,7 @@ async function renderRedactedPageAsImage(
     canvas.height = 0
     return new Uint8Array(await blob.arrayBuffer())
   } finally {
-    await pdf.destroy()
+    await closePdf(pdf)
   }
 }
 

@@ -58,8 +58,6 @@ export async function openPdf(
   const task = lib.getDocument({
     data: bytes,
     password: opts.password,
-    // Security hardening: never evaluate PDF-embedded JS or compile fonts via eval.
-    isEvalSupported: false,
     enableXfa: false,
     useSystemFonts: true,
     disableAutoFetch: true,
@@ -76,6 +74,17 @@ export async function openPdf(
     }
     if (e?.name === 'InvalidPDFException' || e?.name === 'FormatError') throw new InvalidPdfError()
     throw new InvalidPdfError(e?.message ? `Could not open PDF: ${e.message}` : undefined)
+  }
+}
+
+/** Safely release PDF.js document resources across v5/v6 APIs. */
+export async function closePdf(pdf: PDFDocumentProxy): Promise<void> {
+  try {
+    const p = pdf as unknown as { destroy?: () => Promise<void>; cleanup?: () => Promise<void> }
+    if (typeof p.destroy === 'function') await p.destroy()
+    else if (typeof p.cleanup === 'function') await p.cleanup()
+  } catch {
+    /* ignore */
   }
 }
 

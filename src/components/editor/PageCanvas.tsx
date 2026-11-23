@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { Trash2 } from 'lucide-react'
-import type { Annotation, EditorTool, WorkspacePage } from '@/types/workspace'
+import type { Annotation, AnnotationInput, EditorTool, WorkspacePage } from '@/types/workspace'
 import { renderPageToCanvas } from '@/lib/pdf/render'
 import { getAsset } from '@/lib/storage/repo'
 import { cn } from '@/lib/utils/cn'
@@ -19,7 +19,7 @@ interface PageCanvasProps {
   }
   selectedAnnotationId: string | null
   onSelectAnnotation: (id: string | null) => void
-  onAddAnnotation: (ann: Omit<Annotation, 'id'>) => void
+  onAddAnnotation: (ann: AnnotationInput) => void
   onUpdateAnnotation: (id: string, patch: Partial<Annotation>, recordHistory?: boolean) => void
   onDeleteAnnotation: (id: string) => void
   onCropChange: (crop: { x: number; y: number; w: number; h: number }) => void

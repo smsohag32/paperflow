@@ -30,7 +30,6 @@ export function Textarea({ className, ...props }: React.ComponentProps<'textarea
 
 export function Label({ className, ...props }: React.ComponentProps<'label'>) {
   return (
-    // eslint-disable-next-line jsx-a11y/label-has-associated-control
     <label
       className={cn('flex items-center gap-2 text-[13px] leading-none font-medium select-none peer-disabled:opacity-50', className)}
       {...props}

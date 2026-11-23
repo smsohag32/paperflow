@@ -36,7 +36,7 @@ export async function loadPdfDoc(
   } catch (e) {
     const msg = (e as Error)?.message ?? ''
     if (/encrypt/i.test(msg) || /password/i.test(msg)) throw new EncryptedPdfError()
-    throw new Error(`Could not read this PDF: ${msg || 'unknown error'}`)
+    throw new Error(`Could not read this PDF: ${msg || 'unknown error'}`, { cause: e })
   }
 }
 

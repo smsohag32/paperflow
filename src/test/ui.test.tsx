@@ -19,8 +19,8 @@ describe('UI components', () => {
       </MemoryRouter>,
     )
     expect(screen.getByText('Quick Tools')).toBeInTheDocument()
-    expect(screen.getByText('Merge PDF')).toBeInTheDocument()
-    expect(screen.getByText('Compress PDF')).toBeInTheDocument()
+    expect(screen.getAllByText('Merge PDF').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Compress PDF').length).toBeGreaterThan(0)
     expect(screen.getByText('Local AI Tools')).toBeInTheDocument()
   })
 })

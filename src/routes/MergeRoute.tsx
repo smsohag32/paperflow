@@ -73,14 +73,12 @@ export default function MergeRoute() {
   const addFiles = async (files: File[]) => {
     const newItems: MergeItem[] = []
     for (const file of files) {
-      let pageCount: number | null = null
       try {
-        pageCount = await getPageCount(file)
+        const pageCount = await getPageCount(file)
+        newItems.push({ id: uid('m'), file, pageCount })
       } catch {
         toast.error(`Skipped "${file.name}" (not a valid or unlocked PDF)`)
-        continue
       }
-      newItems.push({ id: uid('m'), file, pageCount })
     }
     setItems((prev) => [...prev, ...newItems])
   }

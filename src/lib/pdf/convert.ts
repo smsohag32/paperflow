@@ -1,6 +1,6 @@
 import { rgb, StandardFonts } from '@cantoo/pdf-lib'
 import { loadPdfLib, savePdf } from './pdflib'
-import { openPdf } from './pdfjs'
+import { closePdf, openPdf } from './pdfjs'
 import type { OutputFile } from '@/types/common'
 import { baseName } from '@/lib/utils/format'
 import { throwIfAborted } from '@/lib/performance/task-queue'
@@ -150,7 +150,7 @@ export async function pdfToImages(file: File, opts: PdfToImagesOptions): Promise
     }
     return outputs
   } finally {
-    await pdf.destroy()
+    await closePdf(pdf)
   }
 }
 
@@ -169,6 +169,7 @@ export async function textToPdf(
   const lineHeight = fontSize * 1.45
   const maxWidth = size.width - margin * 2
 
+  // eslint-disable-next-line no-control-regex
   const safe = text.replace(/[^\x09\x0a\x0d\x20-\x7e\xa0-\xff]/g, '?')
   const rawParagraphs = safe.split(/\r?\n/)
   const lines: string[] = []

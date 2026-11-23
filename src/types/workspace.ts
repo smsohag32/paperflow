@@ -95,6 +95,15 @@ export type Annotation =
   | ImageAnnotation
   | RedactAnnotation
 
+export type AnnotationInput =
+  | Omit<TextAnnotation, 'id'>
+  | Omit<MarkupAnnotation, 'id'>
+  | Omit<ShapeAnnotation, 'id'>
+  | Omit<DrawAnnotation, 'id'>
+  | Omit<NoteAnnotation, 'id'>
+  | Omit<ImageAnnotation, 'id'>
+  | Omit<RedactAnnotation, 'id'>
+
 export interface WorkspacePage {
   id: string
   /** Source file id in IndexedDB `blobs` store, or null for a blank page */

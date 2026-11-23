@@ -1,4 +1,5 @@
-import { getDB, safeWrite } from './db'
+import { getDB, safeWrite, type PaperflowDB } from './db'
+import type { StoreNames } from 'idb'
 import type { LibraryFile, ProcessingHistoryEntry } from '@/types/common'
 import { uid } from '@/lib/utils/id'
 
@@ -113,17 +114,18 @@ export type ClearTarget = 'documents' | 'previews' | 'temporary' | 'projects' | 
 
 export async function clearLocalData(target: ClearTarget) {
   const db = await getDB()
-  const stores: (keyof import('./db').PaperflowDB)[] = {
-    documents: ['files', 'blobs', 'previews'] as const,
-    previews: ['previews'] as const,
-    temporary: ['outputs', 'assets'] as const,
-    projects: ['projects'] as const,
-    signatures: ['signatures'] as const,
-    history: ['history'] as const,
-    all: ['files', 'blobs', 'previews', 'projects', 'assets', 'signatures', 'outputs', 'history', 'kv'] as const,
-  }[target] as never
+  const map: Record<ClearTarget, StoreNames<PaperflowDB>[]> = {
+    documents: ['files', 'blobs', 'previews'],
+    previews: ['previews'],
+    temporary: ['outputs', 'assets'],
+    projects: ['projects'],
+    signatures: ['signatures'],
+    history: ['history'],
+    all: ['files', 'blobs', 'previews', 'projects', 'assets', 'signatures', 'outputs', 'history', 'kv'],
+  }
+  const stores = map[target]
   const tx = db.transaction(stores, 'readwrite')
-  await Promise.all([...(stores as string[]).map((s) => tx.objectStore(s as never).clear()), tx.done])
+  await Promise.all([...stores.map((s) => tx.objectStore(s).clear()), tx.done])
 }
 
 export function guessMime(name: string) {

@@ -6,6 +6,7 @@ import {
   DEFAULT_PAGE_NUMBERS,
   DEFAULT_WATERMARK,
   type Annotation,
+  type AnnotationInput,
   type EditorTool,
   type HeaderFooterConfig,
   type PageNumberConfig,
@@ -69,7 +70,7 @@ interface WorkspaceState {
   setCrop: (pageIds: string[], crop?: Rect) => void
   resizePages: (pageIds: string[], width: number, height: number) => void
 
-  addAnnotation: (pageId: string, ann: Omit<Annotation, 'id'>) => string
+  addAnnotation: (pageId: string, ann: AnnotationInput) => string
   updateAnnotation: (pageId: string, annId: string, patch: Partial<Annotation>, recordHistory?: boolean) => void
   deleteAnnotation: (pageId: string, annId: string) => void
   bringForward: (pageId: string, annId: string) => void

@@ -1,4 +1,4 @@
-import { openPdf } from './pdfjs'
+import { closePdf, openPdf } from './pdfjs'
 import { throwIfAborted } from '@/lib/performance/task-queue'
 
 export interface ExtractedPageText {
@@ -102,7 +102,7 @@ export async function extractPdfText(
     }
     return results
   } finally {
-    await pdf.destroy()
+    await closePdf(pdf)
   }
 }
 
@@ -173,7 +173,7 @@ export async function extractPdfTables(
     }
     return tables
   } finally {
-    await pdf.destroy()
+    await closePdf(pdf)
   }
 }
 

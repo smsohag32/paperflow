@@ -1,5 +1,5 @@
 import { loadPdfDoc, loadPdfLib, savePdf } from './pdflib'
-import { openPdf } from './pdfjs'
+import { closePdf, openPdf } from './pdfjs'
 import { throwIfAborted } from '@/lib/performance/task-queue'
 
 export type CompressionPreset = 'light' | 'balanced' | 'strong' | 'maximum' | 'custom'
@@ -110,7 +110,7 @@ export async function analyzeForCompression(
       recommendedStrategy: likelyScanned ? 'adaptive-raster' : 'lossless-structure',
     }
   } finally {
-    await pdf.destroy()
+    await closePdf(pdf)
   }
 }
 
@@ -185,7 +185,7 @@ async function rasterReencode(
     }
     return savePdf(out, { objectStreams: true })
   } finally {
-    await pdf.destroy()
+    await closePdf(pdf)
   }
 }
 

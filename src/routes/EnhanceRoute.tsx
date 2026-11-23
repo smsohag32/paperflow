@@ -16,7 +16,7 @@ import {
   type EnhanceSettings,
   type ScanPresetKey,
 } from '@/lib/image/enhance'
-import { openPdf } from '@/lib/pdf/pdfjs'
+import { closePdf, openPdf } from '@/lib/pdf/pdfjs'
 import { loadPdfLib, savePdf } from '@/lib/pdf/pdflib'
 import { downloadBlob, pdfBlob } from '@/lib/utils/download'
 import { baseName } from '@/lib/utils/format'
@@ -63,7 +63,7 @@ export default function EnhanceRoute() {
           ctx.fillRect(0, 0, orig.width, orig.height)
           await p.render({ canvas: orig, canvasContext: ctx, viewport: vp }).promise
         } finally {
-          await pdf.destroy()
+          await closePdf(pdf)
         }
       } else {
         setPageCount(1)
@@ -139,7 +139,7 @@ export default function EnhanceRoute() {
             setProgress(i / pdf.numPages)
           }
         } finally {
-          await pdf.destroy()
+          await closePdf(pdf)
         }
       } else {
         const bmp = await createImageBitmap(file)

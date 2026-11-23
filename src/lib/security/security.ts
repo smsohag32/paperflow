@@ -1,6 +1,6 @@
-import { loadPdfDoc, loadPdfLib, savePdf } from './pdflib'
-import { openPdf } from './pdfjs'
-import { extractPdfText } from './extract'
+import { loadPdfDoc, loadPdfLib, savePdf } from '@/lib/pdf/pdflib'
+import { closePdf, openPdf } from '@/lib/pdf/pdfjs'
+import { extractPdfText } from '@/lib/pdf/extract'
 
 export interface PdfMetadataInfo {
   title: string
@@ -311,6 +311,6 @@ export async function applyPermanentRedaction(
     outDoc.setProducer('PaperFlow AI')
     return { bytes: await savePdf(outDoc), redactedPages, boxesApplied }
   } finally {
-    await pdf.destroy()
+    await closePdf(pdf)
   }
 }

@@ -1,6 +1,6 @@
 import { rgb, StandardFonts } from '@cantoo/pdf-lib'
 import { loadPdfDoc, loadPdfLib, savePdf } from '@/lib/pdf/pdflib'
-import { openPdf } from '@/lib/pdf/pdfjs'
+import { closePdf, openPdf } from '@/lib/pdf/pdfjs'
 import { throwIfAborted } from '@/lib/performance/task-queue'
 
 export interface OcrLanguage {
@@ -133,7 +133,7 @@ export async function runOcrOnPdf(
         canvas.height = 0
       }
     } finally {
-      await pdf.destroy()
+      await closePdf(pdf)
     }
     return results
   } finally {
