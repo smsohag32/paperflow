@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Copy, Pencil } from 'lucide-react'
 import type { Annotation, AnnotationInput, EditorTool, WorkspacePage } from '@/types/workspace'
 import { renderPageToCanvas } from '@/lib/pdf/render'
 import { getAsset } from '@/lib/storage/repo'
@@ -19,9 +19,10 @@ interface PageCanvasProps {
   }
   selectedAnnotationId: string | null
   onSelectAnnotation: (id: string | null) => void
-  onAddAnnotation: (ann: AnnotationInput) => void
+  onAddAnnotation: (ann: AnnotationInput) => string
   onUpdateAnnotation: (id: string, patch: Partial<Annotation>, recordHistory?: boolean) => void
   onDeleteAnnotation: (id: string) => void
+  onSwitchToSelect?: () => void
   onCropChange: (crop: { x: number; y: number; w: number; h: number }) => void
 }
 
@@ -63,11 +64,17 @@ export function PageCanvas({
   onAddAnnotation,
   onUpdateAnnotation,
   onDeleteAnnotation,
+  onSwitchToSelect,
   onCropChange,
 }: PageCanvasProps) {
   const canvasRef = React.useRef<HTMLCanvasElement>(null)
   const containerRef = React.useRef<HTMLDivElement>(null)
   const [rendering, setRendering] = React.useState(false)
+  const [editingId, setEditingId] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    if (editingId && editingId !== selectedAnnotationId) setEditingId(null)
+  }, [selectedAnnotationId, editingId])
 
   // Draft gesture state (creating shapes/highlights/redactions/freehand)
   const [draft, setDraft] = React.useState<{
@@ -123,6 +130,17 @@ export function PageCanvas({
     return () => ac.abort()
   }, [page.sourceId, page.sourcePageIndex, page.rotation, page.bgColor, zoom, displayW, displayH])
 
+  // Release GPU/RAM canvas buffer when virtualized page unmounts
+  React.useEffect(() => {
+    const canvas = canvasRef.current
+    return () => {
+      if (canvas) {
+        canvas.width = 0
+        canvas.height = 0
+      }
+    }
+  }, [])
+
   const getNorm = (e: React.PointerEvent) => {
     const rect = containerRef.current!.getBoundingClientRect()
     return {
@@ -134,19 +152,22 @@ export function PageCanvas({
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return
     if (tool === 'select' || tool === 'pan') {
-      if (e.target === e.currentTarget) onSelectAnnotation(null)
+      if (e.target === e.currentTarget) {
+        onSelectAnnotation(null)
+        setEditingId(null)
+      }
       return
     }
     const pt = getNorm(e)
 
     if (tool === 'text') {
-      onAddAnnotation({
+      const id = onAddAnnotation({
         type: 'text',
-        x: pt.x,
-        y: pt.y,
+        x: Math.min(0.7, pt.x),
+        y: Math.min(0.92, pt.y),
         w: 0.28,
         h: 0.06,
-        text: 'Double-click to edit',
+        text: 'Type text here',
         fontFamily: toolStyle.fontFamily,
         fontSize: toolStyle.fontSize,
         color: toolStyle.color,
@@ -154,19 +175,23 @@ export function PageCanvas({
         align: 'left',
         opacity: toolStyle.opacity,
       })
+      onSwitchToSelect?.()
+      setEditingId(id)
       return
     }
 
     if (tool === 'note') {
-      onAddAnnotation({
+      const id = onAddAnnotation({
         type: 'note',
-        x: pt.x,
-        y: pt.y,
+        x: Math.min(0.76, pt.x),
+        y: Math.min(0.84, pt.y),
         w: 0.22,
         h: 0.14,
-        text: 'Comment note…',
+        text: 'Write a note…',
         color: '#fef08a',
       })
+      onSwitchToSelect?.()
+      setEditingId(id)
       return
     }
 
@@ -246,6 +271,7 @@ export function PageCanvas({
         color: tool === 'highlight' ? '#fde047' : tool === 'underline' ? '#f59e0b' : '#ef4444',
         opacity: tool === 'highlight' ? 0.38 : 0.9,
       })
+      onSwitchToSelect?.()
     } else if (tool === 'rect' || tool === 'circle' || tool === 'line' || tool === 'arrow') {
       onAddAnnotation({
         type: tool,
@@ -258,6 +284,7 @@ export function PageCanvas({
         strokeWidth: toolStyle.strokeWidth,
         opacity: toolStyle.opacity,
       })
+      onSwitchToSelect?.()
     } else if (tool === 'redact') {
       onAddAnnotation({
         type: 'redact',
@@ -267,6 +294,7 @@ export function PageCanvas({
         h,
         color: '#000000',
       })
+      onSwitchToSelect?.()
     }
     setDraft(null)
   }
@@ -350,6 +378,7 @@ export function PageCanvas({
       {/* Interactive HTML overlay elements */}
       {page.annotations.map((ann) => {
         const selected = ann.id === selectedAnnotationId
+        const isEditing = editingId === ann.id && (ann.type === 'text' || ann.type === 'note')
         const left = ann.type === 'line' || ann.type === 'arrow' ? Math.min(ann.x, ann.x + ann.w) : ann.x
         const top = ann.type === 'line' || ann.type === 'arrow' ? Math.min(ann.y, ann.y + ann.h) : ann.y
         const width = Math.max(0.02, Math.abs(ann.w))
@@ -359,6 +388,10 @@ export function PageCanvas({
           <div
             key={ann.id}
             onPointerDown={(e) => {
+              if (isEditing) {
+                e.stopPropagation()
+                return
+              }
               if (tool !== 'select') return
               e.stopPropagation()
               onSelectAnnotation(ann.id)
@@ -373,6 +406,14 @@ export function PageCanvas({
                 origH: ann.h,
               })
             }}
+            onDoubleClick={(e) => {
+              if (ann.type === 'text' || ann.type === 'note') {
+                e.stopPropagation()
+                onSelectAnnotation(ann.id)
+                onSwitchToSelect?.()
+                setEditingId(ann.id)
+              }
+            }}
             style={{
               left: `${left * 100}%`,
               top: `${top * 100}%`,
@@ -382,33 +423,64 @@ export function PageCanvas({
               opacity: ann.type === 'highlight' ? (ann.opacity ?? 0.38) : (ann.opacity ?? 1),
             }}
             className={cn(
-              'absolute',
-              tool === 'select' && 'cursor-move',
+              'absolute rounded-[2px] transition-[box-shadow]',
+              tool === 'select' && !isEditing && 'cursor-move hover:ring-1 hover:ring-primary/50',
               selected && 'ring-2 ring-primary ring-offset-1',
             )}
           >
-            {ann.type === 'text' && (
-              <div
-                style={{
-                  color: ann.color,
-                  backgroundColor: ann.bgColor && ann.bgColor !== 'transparent' ? ann.bgColor : undefined,
-                  fontSize: `${Math.max(8, ann.fontSize * zoom)}px`,
-                  fontWeight: ann.bold ? 700 : 400,
-                  fontStyle: ann.italic ? 'italic' : 'normal',
-                  textDecoration: ann.underline ? 'underline' : 'none',
-                  textAlign: ann.align ?? 'left',
-                  fontFamily:
-                    ann.fontFamily === 'TimesRoman'
-                      ? 'Georgia, serif'
-                      : ann.fontFamily === 'Courier'
-                        ? 'monospace'
-                        : 'inherit',
-                }}
-                className="size-full overflow-hidden leading-tight whitespace-pre-wrap px-0.5"
-              >
-                {ann.text}
-              </div>
-            )}
+            {ann.type === 'text' &&
+              (isEditing ? (
+                <textarea
+                  autoFocus
+                  onFocus={(e) => e.currentTarget.select()}
+                  value={ann.text}
+                  onChange={(e) => onUpdateAnnotation(ann.id, { text: e.target.value }, false)}
+                  onBlur={() => setEditingId(null)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      e.stopPropagation()
+                      setEditingId(null)
+                    }
+                  }}
+                  style={{
+                    color: ann.color,
+                    backgroundColor: ann.bgColor && ann.bgColor !== 'transparent' ? ann.bgColor : 'rgba(255,255,255,0.92)',
+                    fontSize: `${Math.max(10, ann.fontSize * zoom)}px`,
+                    fontWeight: ann.bold ? 700 : 400,
+                    fontStyle: ann.italic ? 'italic' : 'normal',
+                    textDecoration: ann.underline ? 'underline' : 'none',
+                    textAlign: ann.align ?? 'left',
+                    fontFamily:
+                      ann.fontFamily === 'TimesRoman'
+                        ? 'Georgia, serif'
+                        : ann.fontFamily === 'Courier'
+                          ? 'monospace'
+                          : 'inherit',
+                  }}
+                  className="size-full resize-none rounded-[2px] border-0 px-1 py-0.5 leading-tight outline-none"
+                />
+              ) : (
+                <div
+                  style={{
+                    color: ann.color,
+                    backgroundColor: ann.bgColor && ann.bgColor !== 'transparent' ? ann.bgColor : undefined,
+                    fontSize: `${Math.max(8, ann.fontSize * zoom)}px`,
+                    fontWeight: ann.bold ? 700 : 400,
+                    fontStyle: ann.italic ? 'italic' : 'normal',
+                    textDecoration: ann.underline ? 'underline' : 'none',
+                    textAlign: ann.align ?? 'left',
+                    fontFamily:
+                      ann.fontFamily === 'TimesRoman'
+                        ? 'Georgia, serif'
+                        : ann.fontFamily === 'Courier'
+                          ? 'monospace'
+                          : 'inherit',
+                  }}
+                  className="size-full overflow-hidden leading-tight whitespace-pre-wrap px-0.5"
+                >
+                  {ann.text}
+                </div>
+              ))}
 
             {ann.type === 'highlight' && <div className="size-full rounded-[2px]" style={{ backgroundColor: ann.color }} />}
             {ann.type === 'underline' && (
@@ -435,14 +507,31 @@ export function PageCanvas({
                 }}
               />
             )}
-            {ann.type === 'note' && (
-              <div
-                className="size-full overflow-hidden rounded border border-amber-400/70 p-1.5 text-[11px] leading-snug text-zinc-900 shadow-xs"
-                style={{ backgroundColor: ann.color }}
-              >
-                {ann.text}
-              </div>
-            )}
+            {ann.type === 'note' &&
+              (isEditing ? (
+                <textarea
+                  autoFocus
+                  onFocus={(e) => e.currentTarget.select()}
+                  value={ann.text}
+                  onChange={(e) => onUpdateAnnotation(ann.id, { text: e.target.value }, false)}
+                  onBlur={() => setEditingId(null)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      e.stopPropagation()
+                      setEditingId(null)
+                    }
+                  }}
+                  className="size-full resize-none rounded border border-amber-500 p-1.5 text-[11px] leading-snug text-zinc-900 outline-none"
+                  style={{ backgroundColor: ann.color }}
+                />
+              ) : (
+                <div
+                  className="size-full overflow-hidden rounded border border-amber-400/70 p-1.5 text-[11px] leading-snug text-zinc-900 shadow-xs"
+                  style={{ backgroundColor: ann.color }}
+                >
+                  {ann.text}
+                </div>
+              ))}
             {(ann.type === 'image' || ann.type === 'signature') && (
               <ImageAnnOverlay assetId={ann.assetId} label={ann.label} />
             )}
@@ -455,22 +544,59 @@ export function PageCanvas({
               </div>
             )}
 
-            {/* Selection handles */}
-            {selected && tool === 'select' && (
+            {/* Floating mini action bar & resize handle when selected */}
+            {selected && tool === 'select' && !isEditing && (
               <>
-                <button
-                  type="button"
-                  aria-label="Delete annotation"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onDeleteAnnotation(ann.id)
-                  }}
-                  className="absolute -top-3 -right-3 flex size-6 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm"
-                >
-                  <Trash2 className="size-3" />
-                </button>
                 <div
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="absolute -top-8 right-0 z-20 flex items-center gap-0.5 rounded-md border bg-popover p-0.5 text-popover-foreground shadow-md"
+                >
+                  {(ann.type === 'text' || ann.type === 'note') && (
+                    <button
+                      type="button"
+                      title="Edit text (Double-click)"
+                      aria-label="Edit text"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setEditingId(ann.id)
+                      }}
+                      className="flex size-6 items-center justify-center rounded hover:bg-secondary"
+                    >
+                      <Pencil className="size-3" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    title="Duplicate"
+                    aria-label="Duplicate annotation"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const { id: _ignore, ...rest } = ann
+                      onAddAnnotation({
+                        ...rest,
+                        x: Math.min(0.9, ann.x + 0.025),
+                        y: Math.min(0.9, ann.y + 0.025),
+                      } as AnnotationInput)
+                    }}
+                    className="flex size-6 items-center justify-center rounded hover:bg-secondary"
+                  >
+                    <Copy className="size-3" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Delete (Del)"
+                    aria-label="Delete annotation"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onDeleteAnnotation(ann.id)
+                    }}
+                    className="flex size-6 items-center justify-center rounded text-destructive hover:bg-destructive/10"
+                  >
+                    <Trash2 className="size-3" />
+                  </button>
+                </div>
+                <div
+                  title="Drag to resize"
                   onPointerDown={(e) => {
                     e.stopPropagation()
                     setDragState({
@@ -484,7 +610,7 @@ export function PageCanvas({
                       origH: ann.h,
                     })
                   }}
-                  className="absolute -right-1.5 -bottom-1.5 size-3.5 cursor-nwse-resize rounded-sm border-2 border-primary bg-white"
+                  className="absolute -right-1.5 -bottom-1.5 size-3.5 cursor-nwse-resize rounded-full border-2 border-primary bg-white shadow-xs"
                 />
               </>
             )}

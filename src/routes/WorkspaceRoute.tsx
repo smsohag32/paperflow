@@ -15,6 +15,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Download,
   Undo2,
@@ -81,6 +82,7 @@ import { downloadBlob, pdfBlob } from '@/lib/utils/download'
 import { putAsset, addHistory } from '@/lib/storage/repo'
 import { listSignaturePresets } from '@/lib/image/signature'
 import { PasswordRequiredError } from '@/lib/pdf/pdfjs'
+import { useProfile } from '@/lib/performance/profile'
 import type { StoredSignature } from '@/lib/storage/db'
 import type { EditorTool, FontFamily, WorkspacePage } from '@/types/workspace'
 import { cn } from '@/lib/utils/cn'
@@ -245,6 +247,76 @@ export default function WorkspaceRoute() {
   const activePageIndex = doc ? Math.max(0, doc.pages.findIndex((p) => p.id === activePageId)) : 0
   const activePage = doc?.pages[activePageIndex] ?? null
   const selectedAnn = activePage?.annotations.find((a) => a.id === selectedAnnotationId) ?? null
+  const profile = useProfile()
+
+  const pageGap = 24
+  const getPageItemSize = React.useCallback(
+    (index: number) => {
+      const p = doc?.pages[index]
+      if (!p) return 840
+      const swapped = p.rotation === 90 || p.rotation === 270
+      return Math.round((swapped ? p.width : p.height) * zoom) + pageGap + 22
+    },
+    [doc?.pages, zoom],
+  )
+
+  const pageVirtualizer = useVirtualizer({
+    count: doc?.pages.length ?? 0,
+    getScrollElement: () => centerRef.current,
+    estimateSize: getPageItemSize,
+    overscan: Math.max(1, profile.prefetchPages),
+  })
+
+  // Re-measure virtual page heights whenever zoom or page count/rotations change
+  const pageLayoutKey = doc?.pages.map((p) => `${p.id}:${p.rotation}`).join(',') ?? ''
+  React.useEffect(() => {
+    pageVirtualizer.measure()
+  }, [zoom, pageLayoutKey, pageVirtualizer])
+
+  const programmaticScrollUntilRef = React.useRef(0)
+  const scrollRafRef = React.useRef<number | null>(null)
+
+  const goToPageIndex = React.useCallback(
+    (index: number, behavior: 'smooth' | 'auto' = 'smooth') => {
+      if (!doc || index < 0 || index >= doc.pages.length) return
+      programmaticScrollUntilRef.current = performance.now() + 450
+      setActivePage(doc.pages[index].id)
+      pageVirtualizer.scrollToIndex(index, { align: 'start', behavior })
+    },
+    [doc, setActivePage, pageVirtualizer],
+  )
+
+  const handleViewerScroll = React.useCallback(() => {
+    if (!doc || performance.now() < programmaticScrollUntilRef.current) return
+    if (scrollRafRef.current !== null) return
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null
+      const el = centerRef.current
+      if (!el || !doc) return
+      const anchorY = el.scrollTop + Math.min(el.clientHeight * 0.35, 220)
+      const items = pageVirtualizer.getVirtualItems()
+      if (items.length === 0) return
+      let best = items[0]
+      for (const it of items) {
+        if (it.start <= anchorY && it.end >= anchorY) {
+          best = it
+          break
+        }
+        if (Math.abs(it.start - anchorY) < Math.abs(best.start - anchorY)) best = it
+      }
+      const nextPage = doc.pages[best.index]
+      if (nextPage && nextPage.id !== activePageId) {
+        setActivePage(nextPage.id)
+      }
+    })
+  }, [doc, activePageId, setActivePage, pageVirtualizer])
+
+  React.useEffect(
+    () => () => {
+      if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current)
+    },
+    [],
+  )
 
   const handleOpen = async (file: File, append = false, password?: string) => {
     try {
@@ -325,11 +397,39 @@ export default function WorkspaceRoute() {
           e.preventDefault()
           deleteAnnotation(activePage.id, selectedAnnotationId)
         }
+      } else if (
+        !typing &&
+        !mod &&
+        (e.key === 'ArrowDown' ||
+          e.key === 'ArrowUp' ||
+          e.key === 'PageDown' ||
+          e.key === 'PageUp' ||
+          e.key === ' ')
+      ) {
+        const el = centerRef.current
+        if (!el) return
+        const goingDown = e.key === 'ArrowDown' || e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey)
+        const step = e.key === 'ArrowDown' || e.key === 'ArrowUp' ? 110 : Math.max(240, el.clientHeight * 0.85)
+        e.preventDefault()
+        el.scrollBy({ top: goingDown ? step : -step, behavior: 'smooth' })
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [doc, zoom, selectedAnnotationId, activePage, handleExport, undo, redo, selectAllPages, setZoom, setTool, selectAnnotation, deleteAnnotation])
+  }, [
+    doc,
+    zoom,
+    selectedAnnotationId,
+    activePage,
+    handleExport,
+    undo,
+    redo,
+    selectAllPages,
+    setZoom,
+    setTool,
+    selectAnnotation,
+    deleteAnnotation,
+  ])
 
   const handleDragEnd = (event: DragEndEvent) => {
     if (!doc) return
@@ -991,7 +1091,7 @@ export default function WorkspaceRoute() {
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 const idx = parseInt(pageJump, 10) - 1
-                if (idx >= 0 && idx < doc.pages.length) setActivePage(doc.pages[idx].id)
+                if (idx >= 0 && idx < doc.pages.length) goToPageIndex(idx)
                 setSearchOpen(false)
               }
             }}
@@ -1038,7 +1138,7 @@ export default function WorkspaceRoute() {
                     canDelete={doc.pages.length > 1}
                     onSelect={(e) => {
                       if (e.ctrlKey || e.metaKey || e.shiftKey) toggleSelectPage(p.id, true)
-                      else setActivePage(p.id)
+                      else goToPageIndex(idx)
                     }}
                     onRotate={() => rotatePages([p.id], 90)}
                     onDuplicate={() => duplicatePage(p.id)}
@@ -1052,26 +1152,71 @@ export default function WorkspaceRoute() {
           </div>
         </aside>
 
-        {/* Center Canvas */}
-        <div ref={centerRef} className="flex-1 overflow-auto bg-canvas p-6 scrollbar-thin">
-          {activePage && (
-            <PageCanvas
-              page={activePage}
-              zoom={zoom}
-              tool={tool}
-              toolStyle={toolStyle}
-              selectedAnnotationId={selectedAnnotationId}
-              onSelectAnnotation={selectAnnotation}
-              onAddAnnotation={(ann) => addAnnotation(activePage.id, ann)}
-              onUpdateAnnotation={(id, patch, rec) => updateAnnotation(activePage.id, id, patch, rec)}
-              onDeleteAnnotation={(id) => deleteAnnotation(activePage.id, id)}
-              onCropChange={(crop) => {
-                setCrop([activePage.id], crop)
-                setTool('select')
-                toast.success('Crop box applied (will trim on export)')
-              }}
-            />
-          )}
+        {/* Center Canvas (Virtualized Continuous Scroll) */}
+        <div
+          ref={centerRef}
+          tabIndex={0}
+          aria-label="PDF Page Viewer"
+          onScroll={handleViewerScroll}
+          onPointerDown={() => centerRef.current?.focus({ preventScroll: true })}
+          className="flex-1 overflow-auto bg-canvas px-4 py-6 outline-none scrollbar-thin sm:px-6"
+        >
+          <div
+            style={{
+              height: `${pageVirtualizer.getTotalSize()}px`,
+              position: 'relative',
+              width: '100%',
+            }}
+          >
+            {pageVirtualizer.getVirtualItems().map((vItem) => {
+              const p = doc.pages[vItem.index]
+              if (!p) return null
+              const isCurrent = p.id === activePage?.id
+              return (
+                <div
+                  key={p.id}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${vItem.start}px)`,
+                  }}
+                  onPointerDown={() => {
+                    if (p.id !== activePageId) setActivePage(p.id)
+                  }}
+                  className="flex flex-col items-center pb-6"
+                >
+                  <PageCanvas
+                    page={p}
+                    zoom={zoom}
+                    tool={tool}
+                    toolStyle={toolStyle}
+                    selectedAnnotationId={isCurrent ? selectedAnnotationId : null}
+                    onSelectAnnotation={(id) => {
+                      if (p.id !== activePageId) setActivePage(p.id)
+                      selectAnnotation(id)
+                    }}
+                    onAddAnnotation={(ann) => {
+                      if (p.id !== activePageId) setActivePage(p.id)
+                      return addAnnotation(p.id, ann)
+                    }}
+                    onUpdateAnnotation={(id, patch, rec) => updateAnnotation(p.id, id, patch, rec)}
+                    onDeleteAnnotation={(id) => deleteAnnotation(p.id, id)}
+                    onSwitchToSelect={() => setTool('select')}
+                    onCropChange={(crop) => {
+                      setCrop([p.id], crop)
+                      setTool('select')
+                      toast.success('Crop box applied (will trim on export)')
+                    }}
+                  />
+                  <span className="mt-1.5 text-[11px] font-medium text-muted-foreground/80 tabular-nums">
+                    Page {vItem.index + 1} of {doc.pages.length}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
         </div>
 
         {/* Right Context Panel (Desktop) */}
@@ -1097,7 +1242,7 @@ export default function WorkspaceRoute() {
             variant="ghost"
             size="icon-xs"
             disabled={activePageIndex <= 0}
-            onClick={() => setActivePage(doc.pages[activePageIndex - 1].id)}
+            onClick={() => goToPageIndex(activePageIndex - 1)}
           >
             <ChevronLeft className="size-3.5" />
           </Button>
@@ -1108,7 +1253,7 @@ export default function WorkspaceRoute() {
             variant="ghost"
             size="icon-xs"
             disabled={activePageIndex >= doc.pages.length - 1}
-            onClick={() => setActivePage(doc.pages[activePageIndex + 1].id)}
+            onClick={() => goToPageIndex(activePageIndex + 1)}
           >
             <ChevronRight className="size-3.5" />
           </Button>
