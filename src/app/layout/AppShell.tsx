@@ -143,26 +143,27 @@ export function AppShell() {
 
   const SidebarNav = ({ isMobile = false }: { isMobile?: boolean }) => {
     const compact = collapsed && !isMobile
+    const isRouteActive = (item: { to: string; end?: boolean }) => {
+      if (item.to.includes('?')) return location.pathname + location.search === item.to
+      if (item.end) return location.pathname === item.to
+      return location.pathname === item.to && !location.search
+    }
     const renderItem = (item: { to: string; label: string; icon: React.ComponentType<{ className?: string }>; end?: boolean }) => {
       const Icon = item.icon
+      const active = isRouteActive(item)
       const link = (
         <NavLink
           key={item.to}
           to={item.to}
           end={item.end}
           onClick={() => isMobile && setMobileNavOpen(false)}
-          className={({ isActive }) => {
-            const active = item.to.includes('?')
-              ? location.pathname + location.search === item.to
-              : isActive
-            return cn(
-              'flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium transition-colors',
-              compact && 'justify-center px-0',
-              active
-                ? 'bg-sidebar-accent text-foreground'
-                : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-foreground',
-            )
-          }}
+          className={cn(
+            'flex items-center rounded-lg text-[13.5px] font-medium transition-colors',
+            compact ? 'mx-auto size-9 justify-center p-0' : 'h-9 w-full gap-2.5 px-2.5',
+            active
+              ? 'bg-sidebar-accent text-foreground'
+              : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-foreground',
+          )}
         >
           <Icon className="size-4 shrink-0" />
           {!compact && <span className="truncate">{item.label}</span>}
@@ -185,11 +186,19 @@ export function AppShell() {
     return (
       <div className="flex h-full flex-col">
         {/* Brand */}
-        <div className={cn('flex h-14 items-center border-b border-sidebar-border px-3', compact ? 'justify-center' : 'justify-between')}>
+        <div
+          className={cn(
+            'flex h-14 shrink-0 items-center border-b border-sidebar-border',
+            compact ? 'justify-center px-0' : 'justify-between px-3',
+          )}
+        >
           <NavLink
             to="/"
             onClick={() => isMobile && setMobileNavOpen(false)}
-            className="flex items-center gap-2.5 font-semibold tracking-tight"
+            className={cn(
+              'flex items-center font-semibold tracking-tight',
+              compact ? 'size-9 justify-center rounded-lg' : 'gap-2.5',
+            )}
           >
             <img src="/favicon.svg" alt="" className="size-7 rounded-md" />
             {!compact && (
@@ -212,31 +221,40 @@ export function AppShell() {
           )}
         </div>
 
-        <nav className="flex-1 space-y-5 overflow-y-auto p-2.5 scrollbar-thin" aria-label="Main navigation">
-          <div className="space-y-0.5">{NAV_PRIMARY.map(renderItem)}</div>
-          <div className="space-y-0.5">
-            {!compact && (
+        <nav
+          className={cn('flex-1 space-y-5 overflow-y-auto scrollbar-thin', compact ? 'px-0 py-2.5' : 'p-2.5')}
+          aria-label="Main navigation"
+        >
+          <div className="flex flex-col gap-1">{NAV_PRIMARY.map(renderItem)}</div>
+          <div className="flex flex-col gap-1">
+            {!compact ? (
               <p className="px-2.5 pb-1 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
                 Library
               </p>
+            ) : (
+              <div className="mx-auto my-1 h-px w-6 bg-sidebar-border" />
             )}
             {NAV_SECONDARY.map(renderItem)}
           </div>
         </nav>
 
-        <div className="space-y-0.5 border-t border-sidebar-border p-2.5">
+        <div
+          className={cn(
+            'flex flex-col gap-1 border-t border-sidebar-border',
+            compact ? 'px-0 py-2.5' : 'p-2.5',
+          )}
+        >
           {NAV_BOTTOM.map(renderItem)}
           {compact ? (
-            <Tip label="Keyboard shortcuts" side="right">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="w-full"
-                aria-label="Keyboard shortcuts"
+            <Tip label="Help & Shortcuts" side="right">
+              <button
+                type="button"
+                aria-label="Help & Shortcuts"
                 onClick={() => setShortcutsOpen(true)}
+                className="mx-auto flex size-9 items-center justify-center rounded-lg text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent/60 hover:text-foreground"
               >
-                <HelpCircle className="size-4" />
-              </Button>
+                <HelpCircle className="size-4 shrink-0" />
+              </button>
             </Tip>
           ) : (
             <button
@@ -250,15 +268,14 @@ export function AppShell() {
           )}
           {!isMobile && compact && (
             <Tip label="Expand sidebar" side="right">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="w-full"
+              <button
+                type="button"
                 aria-label="Expand sidebar"
                 onClick={() => setPref({ sidebarCollapsed: false })}
+                className="mx-auto flex size-9 items-center justify-center rounded-lg text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent/60 hover:text-foreground"
               >
-                <PanelLeftOpen className="size-4" />
-              </Button>
+                <PanelLeftOpen className="size-4 shrink-0" />
+              </button>
             </Tip>
           )}
         </div>
@@ -314,6 +331,19 @@ export function AppShell() {
             >
               <Menu className="size-4" />
             </Button>
+            {collapsed && (
+              <Tip label="Expand sidebar" side="bottom">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="hidden md:inline-flex"
+                  aria-label="Expand sidebar"
+                  onClick={() => setPref({ sidebarCollapsed: false })}
+                >
+                  <PanelLeftOpen className="size-4" />
+                </Button>
+              </Tip>
+            )}
             <button
               type="button"
               onClick={() => setCmdOpen(true)}
