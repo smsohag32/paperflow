@@ -121,7 +121,7 @@ export default function DashboardRoute() {
   const recentTools = recentToolIds.map((id) => TOOL_BY_ID[id]).filter(Boolean)
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8 px-4 py-6 md:px-8 md:py-8">
+    <div className="w-full space-y-8 px-4 py-6 md:px-6 lg:px-8">
       {/* Hero */}
       <section className="space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-3">

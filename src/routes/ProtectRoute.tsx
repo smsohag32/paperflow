@@ -142,7 +142,7 @@ export default function ProtectRoute() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 px-4 py-6 md:px-8">
+    <div className="w-full space-y-6 px-4 py-6 md:px-6 lg:px-8">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Security &amp; Permanent Redaction</h1>

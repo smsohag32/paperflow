@@ -35,7 +35,7 @@ export default function PrivacyRoute() {
   const usagePct = storage && storage.quota > 0 ? Math.min(100, (storage.usage / storage.quota) * 100) : 0
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 px-4 py-6 md:px-8">
+    <div className="w-full space-y-6 px-4 py-6 md:px-6 lg:px-8">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Privacy Dashboard</h1>
         <p className="text-sm text-muted-foreground">

@@ -22,7 +22,7 @@ const PrivacyRoute = React.lazy(() => import('@/routes/PrivacyRoute'))
 
 function RouteFallback() {
   return (
-    <div className="mx-auto max-w-5xl space-y-4 p-8">
+    <div className="w-full space-y-4 p-6 lg:p-8">
       <Skeleton className="h-8 w-56" />
       <Skeleton className="h-40 w-full" />
       <div className="grid grid-cols-3 gap-4">

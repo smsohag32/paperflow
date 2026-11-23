@@ -389,7 +389,8 @@ async function renderUnicodeDocToPdf(
       const tableRows: string[][] = []
       while (i < rawLines.length && rawLines[i].trim().startsWith('|')) {
         const rowStr = rawLines[i].trim()
-        if (!/^\|[\s:-]+\|$/.test(rowStr.replace(/\|/g, '|').replace(/[^|:\s-]/g, 'x'))) {
+        const isSeparator = /^\|?[\s|:-]+\|?$/.test(rowStr) && rowStr.includes('-')
+        if (!isSeparator) {
           const cells = rowStr
             .slice(1, rowStr.endsWith('|') ? -1 : undefined)
             .split('|')

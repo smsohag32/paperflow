@@ -109,7 +109,7 @@ export default function OcrRoute() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 md:px-8">
+    <div className="w-full space-y-6 px-4 py-6 md:px-6 lg:px-8">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">OCR &amp; Searchable PDF</h1>

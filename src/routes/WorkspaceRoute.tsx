@@ -246,7 +246,8 @@ export default function WorkspaceRoute() {
   // Keep active page thumbnail scrolled to the top of the left sidebar
   React.useEffect(() => {
     if (!activePageId || !thumbListRef.current) return
-    const el = thumbListRef.current.querySelector<HTMLElement>(`[data-thumb-id="${CSS.escape(activePageId)}"]`)
+    const escaped = globalThis.CSS?.escape ? globalThis.CSS.escape(activePageId) : activePageId
+    const el = thumbListRef.current.querySelector<HTMLElement>(`[data-thumb-id="${escaped}"]`)
     if (!el) return
     const container = thumbListRef.current
     const targetTop = Math.max(0, el.offsetTop - 8)
@@ -549,7 +550,7 @@ export default function WorkspaceRoute() {
 
   if (!doc) {
     return (
-      <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-12">
+      <div className="flex w-full flex-col gap-6 px-4 py-8 md:px-6 lg:px-8">
         <div className="space-y-1 text-center">
           <h1 className="text-xl font-semibold tracking-tight">PDF Workspace</h1>
           <p className="text-sm text-muted-foreground">
@@ -1181,7 +1182,7 @@ export default function WorkspaceRoute() {
               )}
             </div>
           </div>
-          <div className="flex-1 space-y-2 overflow-y-auto p-2 scrollbar-thin">
+          <div ref={thumbListRef} className="relative flex-1 space-y-2 overflow-y-auto p-2 scrollbar-thin">
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <SortableContext items={doc.pages.map((p) => p.id)} strategy={verticalListSortingStrategy}>
                 {doc.pages.map((p, idx) => (

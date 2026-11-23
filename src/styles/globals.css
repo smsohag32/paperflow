@@ -237,3 +237,7 @@
 .pf-text-layer.selecting .endOfContent {
   top: 0;
 }
+
+button{
+  @apply cursor-pointer
+}

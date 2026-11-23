@@ -95,7 +95,7 @@ export default function ToolsRoute() {
   const completedOutputs = jobs.filter((j) => j.status === 'done' && j.output).map((j) => j.output!)
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 md:px-8">
+    <div className="w-full space-y-6 px-4 py-6 md:px-6 lg:px-8">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Tools &amp; Library</h1>
         <p className="text-sm text-muted-foreground">
