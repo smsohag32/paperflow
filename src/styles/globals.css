@@ -4,77 +4,78 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ───────────────────────── Design tokens ───────────────────────── */
+/* Cohesive Slate-Indigo brand (#5561cf / #6370df) paired with ultra-calm neutral surfaces */
 :root {
   --radius: 0.625rem;
 
-  --background: oklch(0.99 0.002 260);
-  --foreground: oklch(0.2 0.012 265);
+  --background: oklch(0.985 0.002 265);
+  --foreground: oklch(0.21 0.01 265);
   --card: oklch(1 0 0);
   --card-foreground: var(--foreground);
   --popover: oklch(1 0 0);
   --popover-foreground: var(--foreground);
-  --primary: oklch(0.52 0.19 268);
+  --primary: oklch(0.525 0.155 270);
   --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.965 0.004 265);
-  --secondary-foreground: oklch(0.25 0.015 265);
-  --muted: oklch(0.965 0.004 265);
-  --muted-foreground: oklch(0.5 0.014 265);
-  --accent: oklch(0.955 0.012 268);
-  --accent-foreground: oklch(0.3 0.06 268);
-  --destructive: oklch(0.58 0.22 27);
+  --secondary: oklch(0.958 0.004 265);
+  --secondary-foreground: oklch(0.26 0.012 265);
+  --muted: oklch(0.958 0.004 265);
+  --muted-foreground: oklch(0.49 0.012 265);
+  --accent: oklch(0.948 0.014 270);
+  --accent-foreground: oklch(0.32 0.06 270);
+  --destructive: oklch(0.57 0.2 26);
   --destructive-foreground: oklch(0.99 0 0);
-  --success: oklch(0.6 0.14 155);
-  --warning: oklch(0.72 0.15 75);
-  --border: oklch(0.915 0.006 265);
-  --input: oklch(0.9 0.006 265);
-  --ring: oklch(0.52 0.19 268 / 55%);
+  --success: oklch(0.58 0.135 155);
+  --warning: oklch(0.71 0.145 75);
+  --border: oklch(0.91 0.005 265);
+  --input: oklch(0.89 0.005 265);
+  --ring: oklch(0.525 0.155 270 / 45%);
 
-  --sidebar: oklch(0.982 0.003 265);
-  --sidebar-foreground: oklch(0.3 0.012 265);
-  --sidebar-accent: oklch(0.94 0.008 265);
-  --sidebar-border: oklch(0.925 0.006 265);
+  --sidebar: oklch(0.972 0.003 265);
+  --sidebar-foreground: oklch(0.32 0.01 265);
+  --sidebar-accent: oklch(0.935 0.01 270);
+  --sidebar-border: oklch(0.915 0.005 265);
 
-  --canvas: oklch(0.955 0.004 265);
-  --page-shadow: 0 1px 2px oklch(0 0 0 / 8%), 0 4px 16px oklch(0 0 0 / 6%);
+  --canvas: oklch(0.945 0.004 265);
+  --page-shadow: 0 1px 2px oklch(0 0 0 / 8%), 0 6px 20px oklch(0 0 0 / 6%);
 }
 
+/* Eye-comfortable Graphite / IDE-inspired Dark Theme (zero glare, unified Slate-Indigo accent) */
 .dark {
-  --background: oklch(0.155 0.006 270);
-  --foreground: oklch(0.94 0.004 265);
-  --card: oklch(0.19 0.007 270);
+  --background: oklch(0.222 0.003 265);        /* #1e1e20 — calm matte graphite */
+  --foreground: oklch(0.875 0.004 265);        /* #d6d6da — soft off-white, zero harsh glare */
+  --card: oklch(0.248 0.004 265);              /* #242427 — subtle elevated card */
   --card-foreground: var(--foreground);
-  --popover: oklch(0.205 0.008 270);
+  --popover: oklch(0.268 0.004 265);           /* #29292d — crisp dropdown/popover */
   --popover-foreground: var(--foreground);
-  --primary: oklch(0.66 0.17 268);
-  --primary-foreground: oklch(0.14 0.01 268);
-  --secondary: oklch(0.235 0.008 270);
-  --secondary-foreground: oklch(0.92 0.004 265);
-  --muted: oklch(0.23 0.008 270);
-  --muted-foreground: oklch(0.68 0.012 265);
-  --accent: oklch(0.26 0.03 268);
-  --accent-foreground: oklch(0.93 0.02 268);
-  --destructive: oklch(0.63 0.2 25);
-  --destructive-foreground: oklch(0.98 0 0);
-  --success: oklch(0.7 0.14 155);
-  --warning: oklch(0.78 0.14 75);
-  --border: oklch(0.27 0.008 270);
-  --input: oklch(0.3 0.008 270);
-  --ring: oklch(0.66 0.17 268 / 55%);
+  --primary: oklch(0.595 0.145 270);           /* #5e6ad2 — refined Linear Slate-Indigo matching logo */
+  --primary-foreground: oklch(0.985 0.003 265);
+  --secondary: oklch(0.282 0.005 265);         /* #2d2d31 — calm secondary surface */
+  --secondary-foreground: oklch(0.87 0.005 265);
+  --muted: oklch(0.275 0.004 265);
+  --muted-foreground: oklch(0.655 0.007 265);  /* #93939b — comfortable secondary text */
+  --accent: oklch(0.305 0.028 270);            /* subtle indigo tint matching primary */
+  --accent-foreground: oklch(0.91 0.012 270);
+  --destructive: oklch(0.61 0.165 25);
+  --destructive-foreground: oklch(0.98 0.003 265);
+  --success: oklch(0.68 0.12 155);
+  --warning: oklch(0.76 0.125 75);
+  --border: oklch(0.308 0.005 265);            /* #333338 — hairline subtle border */
+  --input: oklch(0.33 0.006 265);
+  --ring: oklch(0.595 0.145 270 / 48%);
 
-  --sidebar: oklch(0.17 0.006 270);
-  --sidebar-foreground: oklch(0.85 0.006 265);
-  --sidebar-accent: oklch(0.24 0.009 270);
-  --sidebar-border: oklch(0.25 0.008 270);
+  --sidebar: oklch(0.195 0.003 265);           /* #18181a — deep calm IDE sidebar */
+  --sidebar-foreground: oklch(0.8 0.005 265);
+  --sidebar-accent: oklch(0.268 0.014 270);    /* subtle indigo-graphite active row */
+  --sidebar-border: oklch(0.272 0.004 265);
 
-  --canvas: oklch(0.13 0.005 270);
-  --page-shadow: 0 1px 2px oklch(0 0 0 / 40%), 0 6px 24px oklch(0 0 0 / 35%);
+  --canvas: oklch(0.18 0.003 265);             /* #151517 — quiet PDF canvas backdrop */
+  --page-shadow: 0 2px 6px oklch(0 0 0 / 32%), 0 10px 28px oklch(0 0 0 / 26%);
 }
 
 @theme inline {
   --font-sans:
-    'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans',
-    'Noto Sans Bengali', sans-serif;
-  --font-mono: ui-monospace, 'SFMono-Regular', 'Cascadia Code', Menlo, Consolas, monospace;
+    'Inter', 'Noto Sans Bengali', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', 'Cascadia Code', Menlo, Consolas, monospace;
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);

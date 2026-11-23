@@ -11,8 +11,7 @@ import {
   Settings,
   ShieldCheck,
   HelpCircle,
-  PanelLeftClose,
-  PanelLeftOpen,
+  ChevronLeft,
   Search,
   Upload,
   Sun,
@@ -171,14 +170,17 @@ export function AppShell() {
           end={item.end}
           onClick={() => isMobile && setMobileNavOpen(false)}
           className={cn(
-            'flex items-center rounded-lg text-[13.5px] font-medium transition-colors',
+            'group relative flex items-center rounded-lg text-[13.5px] font-medium transition-all duration-200',
             compact ? 'mx-auto size-9 justify-center p-0' : 'h-9 w-full gap-2.5 px-2.5',
             active
-              ? 'bg-sidebar-accent text-foreground'
-              : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-foreground',
+              ? 'bg-accent text-foreground shadow-xs'
+              : 'text-muted-foreground hover:bg-secondary/70 hover:text-foreground',
           )}
         >
-          <Icon className="size-4 shrink-0" />
+          {active && !compact && (
+            <span className="absolute top-2 bottom-2 left-0 w-[3px] rounded-r-full bg-primary" />
+          )}
+          <Icon className={cn('size-4 shrink-0 transition-transform duration-200 group-hover:scale-105', active && 'text-primary')} />
           {!compact && <span className="truncate">{item.label}</span>}
           {!compact && item.label === 'Processing Queue' && activeJobs.length > 0 && (
             <Badge variant="primary" className="ml-auto">
@@ -201,8 +203,8 @@ export function AppShell() {
         {/* Brand */}
         <div
           className={cn(
-            'flex h-14 shrink-0 items-center border-b border-sidebar-border',
-            compact ? 'justify-center px-0' : 'justify-between px-3',
+            'flex h-14 shrink-0 items-center border-b border-border/70 transition-all duration-300',
+            compact ? 'justify-center px-0' : 'justify-start px-3.5',
           )}
         >
           <NavLink
@@ -213,39 +215,27 @@ export function AppShell() {
               compact ? 'size-9 justify-center rounded-lg' : 'gap-2.5',
             )}
           >
-            <img src="/favicon.svg" alt="" className="size-7 rounded-md" />
+            <img src="/favicon.svg" alt="" className="size-7 shrink-0 rounded-md shadow-xs" />
             {!compact && (
-              <span className="text-[15px]">
+              <span className="truncate text-[15px]">
                 PaperFlow <span className="text-primary">AI</span>
               </span>
             )}
           </NavLink>
-          {!isMobile && !compact && (
-            <Tip label="Collapse sidebar" side="right">
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label="Collapse sidebar"
-                onClick={() => setPref({ sidebarCollapsed: true })}
-              >
-                <PanelLeftClose className="size-4" />
-              </Button>
-            </Tip>
-          )}
         </div>
 
         <nav
-          className={cn('flex-1 space-y-5 overflow-y-auto scrollbar-thin', compact ? 'px-0 py-2.5' : 'p-2.5')}
+          className={cn('flex-1 space-y-5 overflow-y-auto scrollbar-thin', compact ? 'px-0 py-3' : 'p-2.5')}
           aria-label="Main navigation"
         >
           <div className="flex flex-col gap-1">{NAV_PRIMARY.map(renderItem)}</div>
           <div className="flex flex-col gap-1">
             {!compact ? (
-              <p className="px-2.5 pb-1 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
+              <p className="px-2.5 pb-1 text-[11px] font-medium tracking-wider text-muted-foreground/80 uppercase">
                 Library
               </p>
             ) : (
-              <div className="mx-auto my-1 h-px w-6 bg-sidebar-border" />
+              <div className="mx-auto my-1 h-px w-6 bg-border" />
             )}
             {NAV_SECONDARY.map(renderItem)}
           </div>
@@ -253,7 +243,7 @@ export function AppShell() {
 
         <div
           className={cn(
-            'flex flex-col gap-1 border-t border-sidebar-border',
+            'flex flex-col gap-1 border-t border-border/70',
             compact ? 'px-0 py-2.5' : 'p-2.5',
           )}
         >
@@ -264,7 +254,7 @@ export function AppShell() {
                 type="button"
                 aria-label="Help & Shortcuts"
                 onClick={() => setShortcutsOpen(true)}
-                className="mx-auto flex size-9 items-center justify-center rounded-lg text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent/60 hover:text-foreground"
+                className="mx-auto flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
               >
                 <HelpCircle className="size-4 shrink-0" />
               </button>
@@ -273,23 +263,11 @@ export function AppShell() {
             <button
               type="button"
               onClick={() => setShortcutsOpen(true)}
-              className="flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent/60 hover:text-foreground"
+              className="flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
             >
               <HelpCircle className="size-4 shrink-0" />
               <span>Help & Shortcuts</span>
             </button>
-          )}
-          {!isMobile && compact && (
-            <Tip label="Expand sidebar" side="right">
-              <button
-                type="button"
-                aria-label="Expand sidebar"
-                onClick={() => setPref({ sidebarCollapsed: false })}
-                className="mx-auto flex size-9 items-center justify-center rounded-lg text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent/60 hover:text-foreground"
-              >
-                <PanelLeftOpen className="size-4 shrink-0" />
-              </button>
-            </Tip>
           )}
         </div>
       </div>
@@ -297,7 +275,7 @@ export function AppShell() {
   }
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
+    <div className="flex h-dvh w-full overflow-hidden bg-canvas text-foreground md:gap-2 md:p-2">
       <input
         ref={uploadInputRef}
         type="file"
@@ -311,14 +289,30 @@ export function AppShell() {
         }}
       />
 
-      {/* Desktop Sidebar */}
+      {/* Desktop Floating Card Sidebar */}
       <aside
         className={cn(
-          'hidden shrink-0 border-r border-sidebar-border bg-sidebar transition-[width] duration-200 md:block',
-          collapsed ? 'w-[60px]' : 'w-[232px]',
+          'relative hidden shrink-0 rounded-xl border bg-card shadow-sm transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:block',
+          collapsed ? 'w-[62px]' : 'w-[236px]',
         )}
       >
         <SidebarNav />
+        {/* Floating animated edge collapse/expand handle */}
+        <Tip label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} side="right">
+          <button
+            type="button"
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            onClick={() => setPref({ sidebarCollapsed: !collapsed })}
+            className="group absolute top-[16px] -right-4 z-20 flex size-6 items-center justify-center rounded-full border bg-popover text-muted-foreground shadow-sm transition-all duration-200 hover:scale-110 hover:border-primary/60 hover:bg-primary hover:text-primary-foreground active:scale-95"
+          >
+            <ChevronLeft
+              className={cn(
+                'size-3.5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
+                collapsed && 'rotate-180',
+              )}
+            />
+          </button>
+        </Tip>
       </aside>
 
       {/* Mobile Drawer */}
@@ -331,10 +325,10 @@ export function AppShell() {
         </SheetContent>
       </Sheet>
 
-      {/* Main area */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      {/* Main Content Floating Card */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background md:rounded-xl md:border md:shadow-sm">
         {/* Global Header */}
-        <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b bg-background/95 px-3 backdrop-blur md:px-5">
+        <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border/70 bg-card/80 px-3 backdrop-blur md:px-4">
           <div className="flex min-w-0 items-center gap-2">
             <Button
               variant="ghost"
@@ -345,19 +339,6 @@ export function AppShell() {
             >
               <Menu className="size-4" />
             </Button>
-            {collapsed && (
-              <Tip label="Expand sidebar" side="bottom">
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="hidden md:inline-flex"
-                  aria-label="Expand sidebar"
-                  onClick={() => setPref({ sidebarCollapsed: false })}
-                >
-                  <PanelLeftOpen className="size-4" />
-                </Button>
-              </Tip>
-            )}
             <button
               type="button"
               onClick={() => setCmdOpen(true)}
