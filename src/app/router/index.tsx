@@ -17,6 +17,7 @@ const EnhanceRoute = React.lazy(() => import('@/routes/EnhanceRoute'))
 const AiRoute = React.lazy(() => import('@/routes/AiRoute'))
 const ProtectRoute = React.lazy(() => import('@/routes/ProtectRoute'))
 const ExtractRoute = React.lazy(() => import('@/routes/ExtractRoute'))
+const MarkdownRoute = React.lazy(() => import('@/routes/MarkdownRoute'))
 const SettingsRoute = React.lazy(() => import('@/routes/SettingsRoute'))
 const PrivacyRoute = React.lazy(() => import('@/routes/PrivacyRoute'))
 
@@ -60,6 +61,7 @@ export const router = createBrowserRouter([
       { path: 'ai', element: wrap(AiRoute) },
       { path: 'protect', element: wrap(ProtectRoute) },
       { path: 'extract', element: wrap(ExtractRoute) },
+      { path: 'markdown', element: wrap(MarkdownRoute) },
       { path: 'settings', element: wrap(SettingsRoute) },
       { path: 'privacy', element: wrap(PrivacyRoute) },
       { path: '*', element: <Navigate to="/" replace /> },

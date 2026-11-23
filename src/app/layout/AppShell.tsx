@@ -4,6 +4,15 @@ import {
   LayoutDashboard,
   Grid2x2,
   FileEdit,
+  FileCode2,
+  Combine,
+  Scissors,
+  Minimize2,
+  PenTool,
+  ArrowLeftRight,
+  ScanText,
+  Wand2,
+  Table2,
   Sparkles,
   Clock,
   Star,
@@ -12,6 +21,7 @@ import {
   ShieldCheck,
   HelpCircle,
   ChevronLeft,
+  ExternalLink,
   Search,
   Upload,
   Sun,
@@ -51,8 +61,29 @@ import { cn } from '@/lib/utils/cn'
 const NAV_PRIMARY = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/tools', label: 'All Tools', icon: Grid2x2 },
+]
+
+const NAV_FEATURES = [
   { to: '/workspace', label: 'PDF Workspace', icon: FileEdit },
+  { to: '/markdown', label: 'Markdown Viewer', icon: FileCode2 },
+  { to: '/merge', label: 'Merge PDF', icon: Combine },
+  { to: '/split', label: 'Split PDF', icon: Scissors },
+  { to: '/compress', label: 'Compress PDF', icon: Minimize2 },
+  { to: '/sign', label: 'Sign PDF', icon: PenTool },
+  { to: '/convert', label: 'Convert Studio', icon: ArrowLeftRight },
+  { to: '/ocr', label: 'OCR Studio', icon: ScanText },
+  { to: '/enhance', label: 'Scan Enhance', icon: Wand2 },
   { to: '/ai', label: 'AI Workspace', icon: Sparkles },
+  { to: '/extract', label: 'Extract Data', icon: Table2 },
+  { to: '/protect', label: 'Protect & Redact', icon: ShieldCheck },
+]
+
+const NAV_MOBILE = [
+  { to: '/', label: 'Home', icon: LayoutDashboard, end: true },
+  { to: '/workspace', label: 'Workspace', icon: FileEdit },
+  { to: '/markdown', label: 'Markdown', icon: FileCode2 },
+  { to: '/ai', label: 'AI', icon: Sparkles },
+  { to: '/tools', label: 'Tools', icon: Grid2x2 },
 ]
 
 const NAV_SECONDARY = [
@@ -170,17 +201,17 @@ export function AppShell() {
           end={item.end}
           onClick={() => isMobile && setMobileNavOpen(false)}
           className={cn(
-            'group relative flex items-center rounded-lg text-[13.5px] font-medium transition-all duration-200',
-            compact ? 'mx-auto size-9 justify-center p-0' : 'h-9 w-full gap-2.5 px-2.5',
+            'group relative flex items-center rounded-[4px] text-[13px] font-medium transition-colors duration-150',
+            compact ? 'mx-auto size-8 justify-center p-0' : 'h-8 w-full gap-2.5 px-2.5',
             active
-              ? 'bg-accent text-foreground shadow-xs'
+              ? 'bg-accent text-foreground'
               : 'text-muted-foreground hover:bg-secondary/70 hover:text-foreground',
           )}
         >
           {active && !compact && (
-            <span className="absolute top-2 bottom-2 left-0 w-[3px] rounded-r-full bg-primary" />
+            <span className="absolute top-1.5 bottom-1.5 left-0 w-[2.5px] rounded-r-full bg-primary" />
           )}
-          <Icon className={cn('size-4 shrink-0 transition-transform duration-200 group-hover:scale-105', active && 'text-primary')} />
+          <Icon className={cn('size-4 shrink-0 transition-colors', active ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')} />
           {!compact && <span className="truncate">{item.label}</span>}
           {!compact && item.label === 'Processing Queue' && activeJobs.length > 0 && (
             <Badge variant="primary" className="ml-auto">
@@ -203,7 +234,7 @@ export function AppShell() {
         {/* Brand */}
         <div
           className={cn(
-            'flex h-14 shrink-0 items-center border-b border-border/70 transition-all duration-300',
+            'flex h-[52px] shrink-0 items-center border-b border-border/80 transition-all duration-300',
             compact ? 'justify-center px-0' : 'justify-start px-3.5',
           )}
         >
@@ -225,11 +256,21 @@ export function AppShell() {
         </div>
 
         <nav
-          className={cn('flex-1 space-y-5 overflow-y-auto scrollbar-thin', compact ? 'px-0 py-3' : 'p-2.5')}
+          className={cn('flex-1 space-y-4 overflow-y-auto scrollbar-thin', compact ? 'px-0 py-3' : 'p-2.5')}
           aria-label="Main navigation"
         >
           <div className="flex flex-col gap-1">{NAV_PRIMARY.map(renderItem)}</div>
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-0.5">
+            {!compact ? (
+              <p className="px-2.5 pb-1 text-[11px] font-medium tracking-wider text-muted-foreground/80 uppercase">
+                Features
+              </p>
+            ) : (
+              <div className="mx-auto my-1 h-px w-6 bg-border" />
+            )}
+            {NAV_FEATURES.map(renderItem)}
+          </div>
+          <div className="flex flex-col gap-0.5">
             {!compact ? (
               <p className="px-2.5 pb-1 text-[11px] font-medium tracking-wider text-muted-foreground/80 uppercase">
                 Library
@@ -243,8 +284,8 @@ export function AppShell() {
 
         <div
           className={cn(
-            'flex flex-col gap-1 border-t border-border/70',
-            compact ? 'px-0 py-2.5' : 'p-2.5',
+            'flex flex-col gap-0.5 border-t border-border/80',
+            compact ? 'px-0 py-2' : 'p-2.5',
           )}
         >
           {NAV_BOTTOM.map(renderItem)}
@@ -254,7 +295,7 @@ export function AppShell() {
                 type="button"
                 aria-label="Help & Shortcuts"
                 onClick={() => setShortcutsOpen(true)}
-                className="mx-auto flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+                className="mx-auto flex size-8 items-center justify-center rounded-[4px] text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
               >
                 <HelpCircle className="size-4 shrink-0" />
               </button>
@@ -263,19 +304,48 @@ export function AppShell() {
             <button
               type="button"
               onClick={() => setShortcutsOpen(true)}
-              className="flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+              className="flex h-8 w-full items-center gap-2.5 rounded-[4px] px-2.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
             >
-              <HelpCircle className="size-4 shrink-0" />
+              <HelpCircle className="size-4 shrink-0 text-muted-foreground" />
               <span>Help & Shortcuts</span>
             </button>
           )}
+
+          {/* Developer credit */}
+          <div className={cn('mt-1.5 border-t border-border/70 pt-2', compact && 'flex justify-center')}>
+            {compact ? (
+              <Tip label="Developed by Sohag Sheik" side="right">
+                <a
+                  href="https://www.sohagsheik.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Developed by Sohag Sheik"
+                  className="flex size-8 items-center justify-center rounded-lg bg-secondary/70 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-primary/15 hover:text-primary"
+                >
+                  SS
+                </a>
+              </Tip>
+            ) : (
+              <a
+                href="https://www.sohagsheik.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex items-center justify-between rounded-lg px-2.5 py-1.5 text-[11.5px] text-muted-foreground/80 transition-colors hover:bg-secondary/60 hover:text-foreground"
+              >
+                <span className="truncate">
+                  Developed by <span className="font-medium text-foreground/90 group-hover:text-primary">Sohag Sheik</span>
+                </span>
+                <ExternalLink className="size-3 shrink-0 opacity-50 transition-all group-hover:translate-x-0.5 group-hover:text-primary group-hover:opacity-100" />
+              </a>
+            )}
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-canvas text-foreground md:gap-2 md:p-2">
+    <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
       <input
         ref={uploadInputRef}
         type="file"
@@ -289,25 +359,25 @@ export function AppShell() {
         }}
       />
 
-      {/* Desktop Floating Card Sidebar */}
+      {/* Desktop Edge-to-Edge Docked Sidebar */}
       <aside
         className={cn(
-          'relative hidden shrink-0 rounded-xl border bg-card shadow-sm transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:block',
-          collapsed ? 'w-[62px]' : 'w-[236px]',
+          'relative hidden shrink-0 border-r border-border/80 bg-card transition-[width] duration-200 ease-out md:block',
+          collapsed ? 'w-[58px]' : 'w-[228px]',
         )}
       >
         <SidebarNav />
-        {/* Floating animated edge collapse/expand handle */}
+        {/* Subtle edge collapse/expand handle */}
         <Tip label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} side="right">
           <button
             type="button"
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             onClick={() => setPref({ sidebarCollapsed: !collapsed })}
-            className="group absolute top-[16px] -right-4 z-20 flex size-6 items-center justify-center rounded-full border bg-popover text-muted-foreground shadow-sm transition-all duration-200 hover:scale-110 hover:border-primary/60 hover:bg-primary hover:text-primary-foreground active:scale-95"
+            className="group absolute top-[14px] -right-3 z-20 flex size-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-xs transition-all duration-150 hover:border-primary/60 hover:bg-primary hover:text-primary-foreground active:scale-95"
           >
             <ChevronLeft
               className={cn(
-                'size-3.5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
+                'size-3.5 transition-transform duration-200',
                 collapsed && 'rotate-180',
               )}
             />
@@ -317,7 +387,7 @@ export function AppShell() {
 
       {/* Mobile Drawer */}
       <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-        <SheetContent side="left" className="w-[260px] p-0">
+        <SheetContent side="left" className="w-[252px] bg-card p-0">
           <SheetHeader className="sr-only">
             <SheetTitle>Navigation</SheetTitle>
           </SheetHeader>
@@ -325,10 +395,10 @@ export function AppShell() {
         </SheetContent>
       </Sheet>
 
-      {/* Main Content Floating Card */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background md:rounded-xl md:border md:shadow-sm">
+      {/* Full-Bleed Main Workspace */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
         {/* Global Header */}
-        <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border/70 bg-card/80 px-3 backdrop-blur md:px-4">
+        <header className="flex h-[52px] shrink-0 items-center justify-between gap-2 border-b border-border/80 bg-background/95 px-3 backdrop-blur md:px-4">
           <div className="flex min-w-0 items-center gap-2">
             <Button
               variant="ghost"
@@ -474,7 +544,7 @@ export function AppShell() {
           className="flex h-14 shrink-0 items-center justify-around border-t bg-background px-1 safe-bottom md:hidden"
           aria-label="Mobile navigation"
         >
-          {NAV_PRIMARY.map((item) => {
+          {NAV_MOBILE.map((item) => {
             const Icon = item.icon
             return (
               <NavLink
@@ -483,13 +553,13 @@ export function AppShell() {
                 end={item.end}
                 className={({ isActive }) =>
                   cn(
-                    'flex flex-col items-center gap-0.5 rounded-md px-3 py-1 text-[11px] font-medium',
+                    'flex flex-col items-center gap-0.5 rounded-md px-2.5 py-1 text-[11px] font-medium',
                     isActive ? 'text-primary' : 'text-muted-foreground',
                   )
                 }
               >
                 <Icon className="size-4" />
-                <span>{item.label.replace('PDF ', '').replace(' Workspace', '')}</span>
+                <span>{item.label}</span>
               </NavLink>
             )
           })}

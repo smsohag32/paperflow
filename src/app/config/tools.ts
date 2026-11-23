@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   Table2,
   FileEdit,
+  FileCode2,
   Layers,
   type LucideIcon,
 } from 'lucide-react'
@@ -39,6 +40,17 @@ export const TOOLS: ToolDef[] = [
     icon: FileEdit,
     category: 'edit',
     keywords: ['edit', 'annotate', 'text', 'draw', 'highlight', 'crop', 'watermark', 'header', 'footer', 'numbers', 'reorder'],
+    quick: true,
+  },
+  {
+    id: 'markdown',
+    name: 'Markdown Viewer',
+    shortName: 'Markdown (.md)',
+    description: 'VS Code-style .md previewer with theme-aware styling, outline, and copyable content.',
+    route: '/markdown',
+    icon: FileCode2,
+    category: 'edit',
+    keywords: ['markdown', 'md', 'preview', 'readme', 'viewer', 'editor', 'gfm', 'copy'],
     quick: true,
   },
   {

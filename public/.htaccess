@@ -1,0 +1,22 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Don't rewrite index.html itself
+  RewriteRule ^index\.html$ - [L]
+
+  # Serve existing files, directories, and symlinks directly
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME} !-l
+
+  # Fallback all other routes to index.html for React Router SPA
+  RewriteRule . /index.html [L]
+</IfModule>
+
+# Ensure proper MIME types for ES modules, WebAssembly, and Web App Manifest
+<IfModule mod_mime.c>
+  AddType application/javascript .mjs
+  AddType application/wasm .wasm
+  AddType application/manifest+json .webmanifest
+</IfModule>

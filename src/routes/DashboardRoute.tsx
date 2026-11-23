@@ -152,7 +152,7 @@ export default function DashboardRoute() {
           accept={ACCEPTED_UNIVERSAL_FILES}
           onFiles={handleUpload}
           title="Drop PDFs, Markdown, Word, or images to get started"
-          description="Auto-converts PDF, .md, .docx, .txt, .html, PNG, JPG & WebP directly into your PDF Workspace."
+          description="PDF, .md, .docx, .txt, .html, PNG, JPG & WebP directly into your PDF Workspace."
         />
       </section>
 
