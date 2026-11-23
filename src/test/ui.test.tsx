@@ -5,11 +5,11 @@ import { FileDropzone } from '@/components/upload/FileDropzone'
 import DashboardRoute from '@/routes/DashboardRoute'
 
 describe('UI components', () => {
-  it('renders FileDropzone with privacy badge', () => {
+  it('renders FileDropzone with browse button', () => {
     const onFiles = vi.fn()
     render(<FileDropzone onFiles={onFiles} title="Upload PDF" />)
     expect(screen.getByText('Upload PDF')).toBeInTheDocument()
-    expect(screen.getByText('Processed locally on your device')).toBeInTheDocument()
+    expect(screen.getByText('Browse files')).toBeInTheDocument()
   })
 
   it('renders Dashboard with quick tools and local AI section', () => {

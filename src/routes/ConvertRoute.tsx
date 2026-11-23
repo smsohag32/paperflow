@@ -9,7 +9,6 @@ import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { FileDropzone } from '@/components/upload/FileDropzone'
-import { PrivacyPill } from '@/components/shared/Dialogs'
 import {
   docxToPdf,
   htmlToPdf,
@@ -116,7 +115,6 @@ export default function ConvertRoute() {
           <h1 className="text-2xl font-semibold tracking-tight">Convert Studio</h1>
           <p className="text-sm text-muted-foreground">Convert between PDF, Images, Text, HTML, and DOCX locally.</p>
         </div>
-        <PrivacyPill />
       </div>
 
       <Tabs defaultValue="img2pdf">

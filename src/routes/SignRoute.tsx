@@ -19,7 +19,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input, Label } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { PrivacyPill } from '@/components/shared/Dialogs'
 import {
   deleteSignaturePreset,
   listSignaturePresets,
@@ -236,7 +235,6 @@ export default function SignRoute() {
             Draw handwritten signatures or upload a photo with automatic transparent background removal.
           </p>
         </div>
-        <PrivacyPill />
       </div>
 
       <div className="flex items-start gap-2 rounded-lg border bg-secondary/40 p-3 text-xs text-muted-foreground">

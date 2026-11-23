@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { ShieldCheck, Lock, Keyboard } from 'lucide-react'
+import { Lock, Keyboard } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -11,22 +11,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
 import { Kbd } from '@/components/ui/misc'
-import { cn } from '@/lib/utils/cn'
-
-export function PrivacyPill({ className, compact }: { className?: string; compact?: boolean }) {
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground',
-        className,
-      )}
-      title="All PDF processing runs locally in your browser. Files are never uploaded."
-    >
-      <ShieldCheck className="size-3.5 text-success" />
-      {compact ? 'Local only' : 'Processed locally on your device'}
-    </span>
-  )
-}
 
 export function PasswordDialog({
   open,

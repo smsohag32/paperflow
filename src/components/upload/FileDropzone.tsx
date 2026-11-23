@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Upload, ShieldCheck, FileText } from 'lucide-react'
+import { Upload, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils/cn'
 
@@ -100,10 +100,6 @@ export function FileDropzone({
           >
             Browse files
           </Button>
-          <span className="inline-flex items-center gap-1.5 rounded-md bg-secondary px-2.5 py-1 text-xs text-muted-foreground">
-            <ShieldCheck className="size-3.5 text-success" />
-            Processed locally on your device
-          </span>
         </div>
       )}
     </div>

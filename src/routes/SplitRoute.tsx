@@ -7,7 +7,6 @@ import { Input, Label } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Segmented } from '@/components/ui/radio'
 import { FileDropzone } from '@/components/upload/FileDropzone'
-import { PrivacyPill } from '@/components/shared/Dialogs'
 import { chunkGroups, extractPages, getPageCount, splitPdf } from '@/lib/pdf/ops'
 import { parsePageRange, parseRangeGroups } from '@/lib/pdf/page-range'
 import { downloadBlob, downloadOutputs, pdfBlob } from '@/lib/utils/download'
@@ -94,7 +93,6 @@ export default function SplitRoute() {
             Split by custom ranges, every N pages, separate every page, or extract specific pages.
           </p>
         </div>
-        <PrivacyPill />
       </div>
 
       {!file ? (

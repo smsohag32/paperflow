@@ -39,7 +39,7 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { Badge, Kbd } from '@/components/ui/misc'
 import { CommandPalette } from '@/components/shared/CommandPalette'
-import { ShortcutsDialog, PrivacyPill } from '@/components/shared/Dialogs'
+import { ShortcutsDialog } from '@/components/shared/Dialogs'
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary'
 import { usePreferences } from '@/stores/preferences'
 import { useQueueStore } from '@/stores/queue'
@@ -356,8 +356,6 @@ export function AppShell() {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2">
-            <PrivacyPill compact className="hidden lg:inline-flex" />
-
             <Button size="sm" onClick={() => uploadInputRef.current?.click()}>
               <Upload className="size-3.5" />
               <span className="hidden sm:inline">Open PDF</span>

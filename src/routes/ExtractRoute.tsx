@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/misc'
 import { FileDropzone } from '@/components/upload/FileDropzone'
-import { PrivacyPill } from '@/components/shared/Dialogs'
 import {
   auditPages,
   classifyDocument,
@@ -66,7 +65,6 @@ export default function ExtractRoute() {
             Extract text &amp; tables (CSV/JSON), classify document type, and audit blank, duplicate, or scanned pages.
           </p>
         </div>
-        <PrivacyPill />
       </div>
 
       {!file ? (

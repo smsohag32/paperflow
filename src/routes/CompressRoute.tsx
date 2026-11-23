@@ -10,7 +10,6 @@ import { Progress } from '@/components/ui/progress'
 import { Segmented } from '@/components/ui/radio'
 import { Badge } from '@/components/ui/misc'
 import { FileDropzone } from '@/components/upload/FileDropzone'
-import { PrivacyPill } from '@/components/shared/Dialogs'
 import {
   analyzeForCompression,
   compressPdf,
@@ -126,7 +125,6 @@ export default function CompressRoute() {
             Adaptive local PDF compression with presets or a target file size.
           </p>
         </div>
-        <PrivacyPill />
       </div>
 
       {!file ? (

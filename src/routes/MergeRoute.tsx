@@ -16,7 +16,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input, Label } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { FileDropzone } from '@/components/upload/FileDropzone'
-import { PrivacyPill } from '@/components/shared/Dialogs'
 import { getPageCount, mergePdfs } from '@/lib/pdf/ops'
 import { downloadBlob, pdfBlob } from '@/lib/utils/download'
 import { addHistory } from '@/lib/storage/repo'
@@ -130,7 +129,6 @@ export default function MergeRoute() {
           <h1 className="text-2xl font-semibold tracking-tight">Merge PDF</h1>
           <p className="text-sm text-muted-foreground">Combine multiple PDFs in any order without uploading them.</p>
         </div>
-        <PrivacyPill />
       </div>
 
       <FileDropzone

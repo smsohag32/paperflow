@@ -10,7 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/misc'
 import { Progress } from '@/components/ui/progress'
 import { FileDropzone } from '@/components/upload/FileDropzone'
-import { PrivacyPill } from '@/components/shared/Dialogs'
 import {
   applyPermanentRedaction,
   detectSensitiveInfo,
@@ -151,7 +150,6 @@ export default function ProtectRoute() {
             AES-256 encryption, authorized unlocking, metadata sanitization, and genuine permanent redaction.
           </p>
         </div>
-        <PrivacyPill />
       </div>
 
       {!file ? (

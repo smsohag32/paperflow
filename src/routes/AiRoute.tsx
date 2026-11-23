@@ -23,7 +23,6 @@ import { SimpleSelect } from '@/components/ui/select'
 import { Segmented } from '@/components/ui/radio'
 import { Badge } from '@/components/ui/misc'
 import { FileDropzone } from '@/components/upload/FileDropzone'
-import { PrivacyPill } from '@/components/shared/Dialogs'
 import { extractPdfText, type ExtractedPageText } from '@/lib/pdf/extract'
 import {
   clearAllCachedModels,
@@ -213,7 +212,6 @@ export default function AiRoute() {
             100% free, open-source browser AI via Transformers.js. Zero API keys, zero cloud uploads, opt-in model downloads.
           </p>
         </div>
-        <PrivacyPill />
       </div>
 
       {/* Document context loader */}

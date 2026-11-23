@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { ShieldCheck, HardDrive, Trash2, CheckCircle2, Lock } from 'lucide-react'
+import { HardDrive, Trash2, CheckCircle2, Lock } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -37,10 +37,6 @@ export default function PrivacyRoute() {
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-6 md:px-8">
       <div className="space-y-1">
-        <div className="inline-flex items-center gap-2 rounded-full bg-success/10 px-3 py-1 text-xs font-medium text-success">
-          <ShieldCheck className="size-3.5" />
-          Processed locally on your device
-        </div>
         <h1 className="text-2xl font-semibold tracking-tight">Privacy Dashboard</h1>
         <p className="text-sm text-muted-foreground">
           PaperFlow AI is designed from the ground up so your PDFs, signatures, and extracted text never leave your browser.

@@ -8,7 +8,6 @@ import { Input, Label } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/misc'
 import { FileDropzone } from '@/components/upload/FileDropzone'
-import { PrivacyPill } from '@/components/shared/Dialogs'
 import { buildSearchablePdf, OCR_LANGUAGES, runOcrOnPdf, type OcrPageResult } from '@/lib/ocr/ocr'
 import { parsePageRange } from '@/lib/pdf/page-range'
 import { getPageCount } from '@/lib/pdf/ops'
@@ -118,7 +117,6 @@ export default function OcrRoute() {
             Extract text from scanned PDFs and images locally with Tesseract.js (English, Bangla &amp; more).
           </p>
         </div>
-        <PrivacyPill />
       </div>
 
       <Card>

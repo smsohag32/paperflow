@@ -8,7 +8,6 @@ import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { Progress } from '@/components/ui/progress'
 import { FileDropzone } from '@/components/upload/FileDropzone'
-import { PrivacyPill } from '@/components/shared/Dialogs'
 import {
   applyEnhanceToCanvas,
   estimateSkewAngle,
@@ -179,7 +178,6 @@ export default function EnhanceRoute() {
             Deskew, clean shadows, sharpen, and optimize scanned documents and photos locally.
           </p>
         </div>
-        <PrivacyPill />
       </div>
 
       {!file ? (
