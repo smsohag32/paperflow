@@ -91,7 +91,7 @@ All AI models are **100% optional** and **never downloaded automatically** or on
 
 | Model | Task | Approx. Size | License |
 | --- | --- | --- | --- |
-| `onnx-community/SmolLM2-360M-Instruct` | Light Chat / Summary | ~230 MB | Apache-2.0 |
+| `HuggingFaceTB/SmolLM2-360M-Instruct` | Light Chat / Summary | ~230 MB | Apache-2.0 |
 | `onnx-community/Qwen2.5-0.5B-Instruct` | Balanced Chat / Q&A | ~480 MB | Apache-2.0 |
 | `onnx-community/Qwen2.5-1.5B-Instruct` | Advanced Chat (WebGPU) | ~1.1 GB | Apache-2.0 |
 | `Xenova/m2m100_418M` | Translation (100 langs, EN ↔ BN) | ~470 MB | MIT |

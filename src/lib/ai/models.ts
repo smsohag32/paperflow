@@ -26,7 +26,7 @@ export interface LocalModelSpec {
  */
 export const LOCAL_MODELS: LocalModelSpec[] = [
   {
-    id: 'onnx-community/SmolLM2-360M-Instruct',
+    id: 'HuggingFaceTB/SmolLM2-360M-Instruct',
     name: 'SmolLM2 360M Instruct',
     task: 'chat',
     tier: 'light',

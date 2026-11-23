@@ -1,12 +1,8 @@
 /// <reference lib="webworker" />
 import { env, pipeline, type PipelineType } from '@huggingface/transformers'
 
-// Use local ONNX runtime WASM files copied to /public/vendor/ort
 env.allowLocalModels = false
 env.useBrowserCache = true
-if (env.backends?.onnx?.wasm) {
-  env.backends.onnx.wasm.wasmPaths = '/vendor/ort/'
-}
 
 type WorkerReq =
   | { id: string; type: 'load'; modelId: string; task: 'text-generation' | 'translation' | 'feature-extraction'; device: 'webgpu' | 'wasm'; dtype: string }
