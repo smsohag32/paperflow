@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { PDFDocument, StandardFonts } from '@cantoo/pdf-lib'
 import { mergePdfs, splitPdf, extractPages, rotatePages, deletePages, getPageCount } from '@/lib/pdf/ops'
 import { parsePageRange, parseRangeGroups, formatPageRange } from '@/lib/pdf/page-range'
-import { textToPdf } from '@/lib/pdf/convert'
+import { textToPdf, markdownToPdf } from '@/lib/pdf/convert'
 import { encryptPdf, unlockPdf, inspectMetadata, stripMetadata } from '@/lib/security/security'
 import { compressPdf } from '@/lib/pdf/compress'
 import { removeBackgroundFromImageData, findContentBounds } from '@/lib/image/signature'
@@ -64,9 +64,15 @@ describe('Core PDF operations (real PDF outputs)', () => {
     expect(await getPageCount(deleted)).toBe(2)
   })
 
-  it('converts plain text to a valid PDF', async () => {
+  it('converts plain text and Markdown (.md) to valid PDFs', async () => {
     const bytes = await textToPdf('Hello PaperFlow AI.\n\nSecond paragraph here.', { title: 'Test Note' })
     expect(await getPageCount(bytes)).toBe(1)
+
+    const mdBytes = await markdownToPdf(
+      '# Project Spec\n\n## Overview\n- Fast local PDF tools\n- Markdown support\n\n> Built for privacy.\n\n```ts\nconst ok = true\n```',
+      { title: 'Spec' },
+    )
+    expect(await getPageCount(mdBytes)).toBe(1)
   })
 
   it('encrypts with AES-256 and unlocks with valid password', async () => {

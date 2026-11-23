@@ -46,6 +46,7 @@ import { useQueueStore } from '@/stores/queue'
 import { useWorkspace } from '@/stores/workspace'
 import { getLibraryFile } from '@/lib/storage/repo'
 import { downloadBlob, downloadOutputs } from '@/lib/utils/download'
+import { ACCEPTED_UNIVERSAL_FILES, ensurePdfFile } from '@/lib/pdf/convert'
 import { cn } from '@/lib/utils/cn'
 
 const NAV_PRIMARY = [
@@ -124,11 +125,12 @@ export function AppShell() {
 
   const handleGlobalUpload = async (file: File) => {
     try {
-      await openFile(file)
+      const { file: pdfFile, converted } = await ensurePdfFile(file)
+      await openFile(pdfFile)
       navigate('/workspace')
-      toast.success(`Opened ${file.name}`)
+      toast.success(converted ? `Converted ${file.name} to PDF & opened` : `Opened ${file.name}`)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not open PDF')
+      toast.error(err instanceof Error ? err.message : 'Could not open file')
     }
   }
 
@@ -288,7 +290,7 @@ export function AppShell() {
       <input
         ref={uploadInputRef}
         type="file"
-        accept=".pdf,application/pdf"
+        accept={ACCEPTED_UNIVERSAL_FILES}
         className="sr-only"
         onChange={(e) => {
           const f = e.target.files?.[0]

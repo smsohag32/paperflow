@@ -78,6 +78,7 @@ import { PageThumbnail } from '@/components/pdf-viewer/PageThumbnail'
 import { PageCanvas } from '@/components/editor/PageCanvas'
 import { useWorkspace } from '@/stores/workspace'
 import { exportWorkspacePdf } from '@/lib/pdf/export-workspace'
+import { ACCEPTED_UNIVERSAL_FILES, ensurePdfFile } from '@/lib/pdf/convert'
 import { downloadBlob, pdfBlob } from '@/lib/utils/download'
 import { putAsset, addHistory } from '@/lib/storage/repo'
 import { listSignaturePresets } from '@/lib/image/signature'
@@ -225,7 +226,12 @@ export default function WorkspaceRoute() {
 
   const [exporting, setExporting] = React.useState(false)
   const [rightPanelOpen, setRightPanelOpen] = React.useState(false)
+  const [panelTab, setPanelTab] = React.useState<'element' | 'page' | 'doc'>('page')
   const [signatures, setSignatures] = React.useState<StoredSignature[]>([])
+
+  React.useEffect(() => {
+    if (selectedAnnotationId) setPanelTab('element')
+  }, [selectedAnnotationId])
   const [pwPrompt, setPwPrompt] = React.useState<{ file: File; append?: boolean; error?: string } | null>(null)
   const [searchOpen, setSearchOpen] = React.useState(false)
   const [pageJump, setPageJump] = React.useState('')
@@ -320,15 +326,24 @@ export default function WorkspaceRoute() {
 
   const handleOpen = async (file: File, append = false, password?: string) => {
     try {
-      if (append) await appendFile(file, { password })
-      else await openFile(file, { password })
+      const { file: pdfFile, converted } = await ensurePdfFile(file)
+      if (append) await appendFile(pdfFile, { password })
+      else await openFile(pdfFile, { password })
       setPwPrompt(null)
-      toast.success(append ? `Appended ${file.name}` : `Opened ${file.name}`)
+      toast.success(
+        append
+          ? converted
+            ? `Converted & appended ${file.name}`
+            : `Appended ${file.name}`
+          : converted
+            ? `Converted ${file.name} to PDF`
+            : `Opened ${file.name}`,
+      )
     } catch (e) {
       if (e instanceof PasswordRequiredError) {
         setPwPrompt({ file, append, error: e.incorrect ? 'Incorrect password.' : undefined })
       } else {
-        toast.error(e instanceof Error ? e.message : 'Failed to open PDF')
+        toast.error(e instanceof Error ? e.message : 'Failed to open file')
       }
     }
   }
@@ -508,7 +523,12 @@ export default function WorkspaceRoute() {
             Open a PDF to reorganize pages, add annotations, signatures, watermarks, page numbers, or permanent redactions.
           </p>
         </div>
-        <FileDropzone onFiles={(files) => files[0] && handleOpen(files[0])} />
+        <FileDropzone
+          accept={ACCEPTED_UNIVERSAL_FILES}
+          onFiles={(files) => files[0] && handleOpen(files[0])}
+          title="Drop a PDF, Markdown (.md), Word (.docx), or image"
+          description="Non-PDF files are converted automatically and opened right here"
+        />
         <PasswordDialog
           open={!!pwPrompt}
           fileName={pwPrompt?.file.name ?? ''}
@@ -521,7 +541,7 @@ export default function WorkspaceRoute() {
   }
 
   const PropertiesContent = () => (
-    <Tabs defaultValue={selectedAnn ? 'element' : 'page'} className="flex h-full flex-col">
+    <Tabs value={panelTab} onValueChange={(v) => setPanelTab(v as 'element' | 'page' | 'doc')} className="flex h-full flex-col">
       <TabsList className="mx-3 mt-3 w-[calc(100%-1.5rem)]">
         <TabsTrigger value="element">Element</TabsTrigger>
         <TabsTrigger value="page">Page</TabsTrigger>
@@ -934,7 +954,7 @@ export default function WorkspaceRoute() {
       <input
         ref={openInputRef}
         type="file"
-        accept=".pdf,application/pdf"
+        accept={ACCEPTED_UNIVERSAL_FILES}
         className="sr-only"
         onChange={(e) => {
           const f = e.target.files?.[0]
@@ -945,7 +965,7 @@ export default function WorkspaceRoute() {
       <input
         ref={appendInputRef}
         type="file"
-        accept=".pdf,application/pdf"
+        accept={ACCEPTED_UNIVERSAL_FILES}
         className="sr-only"
         onChange={(e) => {
           const f = e.target.files?.[0]

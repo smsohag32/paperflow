@@ -24,6 +24,7 @@ import { deleteLibraryFile, getLibraryFile, listLibraryFiles } from '@/lib/stora
 import { getDB, type StoredProject } from '@/lib/storage/db'
 import type { LibraryFile } from '@/types/common'
 import { formatBytes, formatRelativeTime } from '@/lib/utils/format'
+import { ACCEPTED_UNIVERSAL_FILES, ensurePdfFile } from '@/lib/pdf/convert'
 
 function getGreeting() {
   const h = new Date().getHours()
@@ -67,21 +68,28 @@ export default function DashboardRoute() {
   }, [refresh])
 
   const handleUpload = async (files: File[]) => {
+    if (files.length === 0) return
     try {
-      const pdfs = files.filter((f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'))
-      if (pdfs.length === 0) {
-        toast.info('Opening Convert Studio for non-PDF files')
-        navigate('/convert')
-        return
+      const prepared = await Promise.all(files.map((f) => ensurePdfFile(f)))
+      await openFile(prepared[0].file)
+      for (let i = 1; i < prepared.length; i++) {
+        await appendFile(prepared[i].file)
       }
-      await openFile(pdfs[0])
-      for (let i = 1; i < pdfs.length; i++) {
-        await appendFile(pdfs[i])
+      const convertedCount = prepared.filter((p) => p.converted).length
+      if (prepared.length > 1) {
+        toast.success(
+          convertedCount > 0
+            ? `Converted & opened ${prepared.length} files in Workspace`
+            : `Opened ${prepared.length} PDFs in Workspace`,
+        )
+      } else if (prepared[0].converted) {
+        toast.success(`Converted ${files[0].name} to PDF & opened in Workspace`)
+      } else {
+        toast.success(`Opened ${files[0].name}`)
       }
-      toast.success(pdfs.length > 1 ? `Opened ${pdfs.length} PDFs in workspace` : `Opened ${pdfs[0].name}`)
       navigate('/workspace')
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not open PDF')
+      toast.error(e instanceof Error ? e.message : 'Could not open file')
     }
   }
 
@@ -141,10 +149,10 @@ export default function DashboardRoute() {
 
         <FileDropzone
           multiple
-          accept=".pdf,application/pdf,image/*"
+          accept={ACCEPTED_UNIVERSAL_FILES}
           onFiles={handleUpload}
-          title="Drop PDFs or images to get started"
-          description="Supports single or multiple PDFs (auto-merged in workspace), PNG, JPG, and WebP. Zero cloud uploads."
+          title="Drop PDFs, Markdown, Word, or images to get started"
+          description="Auto-converts PDF, .md, .docx, .txt, .html, PNG, JPG & WebP directly into your PDF Workspace."
         />
       </section>
 

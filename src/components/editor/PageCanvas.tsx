@@ -664,6 +664,8 @@ export function PageCanvas({
               }
               if (tool !== 'select') return
               e.stopPropagation()
+              window.getSelection()?.removeAllRanges()
+              setTextSelection(null)
               onSelectAnnotation(ann.id)
               setDragState({
                 annId: ann.id,
@@ -677,10 +679,12 @@ export function PageCanvas({
               })
             }}
             onDoubleClick={(e) => {
+              e.stopPropagation()
+              window.getSelection()?.removeAllRanges()
+              setTextSelection(null)
+              onSelectAnnotation(ann.id)
+              onSwitchToSelect?.()
               if (ann.type === 'text' || ann.type === 'note') {
-                e.stopPropagation()
-                onSelectAnnotation(ann.id)
-                onSwitchToSelect?.()
                 setEditingId(ann.id)
               }
             }}
@@ -694,6 +698,7 @@ export function PageCanvas({
             }}
             className={cn(
               'absolute rounded-[2px] transition-[box-shadow]',
+              selected || isEditing ? 'z-20' : 'z-10',
               ann.type === 'highlight' && 'mix-blend-multiply',
               tool === 'select' && !isEditing && 'cursor-move hover:ring-1 hover:ring-primary/50',
               selected && 'ring-2 ring-primary ring-offset-1',

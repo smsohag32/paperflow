@@ -13,6 +13,7 @@ import {
   docxToPdf,
   htmlToPdf,
   imagesToPdf,
+  markdownToPdf,
   PAGE_SIZES,
   pdfToImages,
   textToPdf,
@@ -103,6 +104,20 @@ export default function ConvertRoute() {
       toast.success('Converted DOCX to PDF')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'DOCX conversion failed')
+    } finally {
+      setProgress(null)
+    }
+  }
+
+  const runMarkdownToPdf = async (file: File) => {
+    setProgress(0.2)
+    try {
+      const md = await file.text()
+      const bytes = await markdownToPdf(md, { title: baseName(file.name) })
+      downloadBlob(pdfBlob(bytes), `${baseName(file.name)}.pdf`)
+      toast.success(`Converted ${file.name} to PDF`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Markdown conversion failed')
     } finally {
       setProgress(null)
     }
@@ -290,7 +305,21 @@ export default function ConvertRoute() {
         </TabsContent>
 
         <TabsContent value="doc" className="mt-5 space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader>
+                <CardTitle>Markdown (.md) → PDF</CardTitle>
+                <CardDescription>Formats headings, lists, quotes, and code blocks locally.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <FileDropzone
+                  compact
+                  accept=".md,.markdown,text/markdown"
+                  onFiles={(f) => f[0] && runMarkdownToPdf(f[0])}
+                  title="Drop a .md file"
+                />
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader>
                 <CardTitle>DOCX → PDF</CardTitle>
