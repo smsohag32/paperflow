@@ -12,6 +12,7 @@ import {
   FileEdit,
   FileCode2,
   Layers,
+  GitCompareArrows,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -161,6 +162,17 @@ export const TOOLS: ToolDef[] = [
     icon: ShieldCheck,
     category: 'security',
     keywords: ['password', 'encrypt', 'unlock', 'redact', 'metadata', 'pii', 'sensitive', 'privacy'],
+  },
+  {
+    id: 'compare',
+    name: 'PDF Compare Studio',
+    shortName: 'Compare PDF',
+    description: 'Compare two PDFs side-by-side with overlay wipe, pixel diff, and text changes.',
+    route: '/compare',
+    icon: GitCompareArrows,
+    category: 'edit',
+    keywords: ['compare', 'diff', 'visual diff', 'side by side', 'changes', 'revision'],
+    quick: true,
   },
   {
     id: 'batch',

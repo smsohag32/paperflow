@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input, Label, Textarea } from '@/components/ui/input'
 import { SimpleSelect } from '@/components/ui/select'
-import { Slider } from '@/components/ui/slider'
+import { SmoothSizeSlider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { FileDropzone } from '@/components/upload/FileDropzone'
@@ -188,17 +188,25 @@ export default function ConvertRoute() {
                     ]}
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label>Margin ({margin}pt)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={144}
-                    className="h-8"
-                    value={margin}
-                    onChange={(e) => setMargin(Number(e.target.value) || 0)}
-                  />
-                </div>
+                <SmoothSizeSlider
+                  label="Margin"
+                  value={margin}
+                  min={0}
+                  max={144}
+                  step={4}
+                  size="sm"
+                  showSteppers
+                  stepperStep={8}
+                  resetValue={24}
+                  formatValue={(v) => `${v}pt`}
+                  presets={[
+                    { label: '0', value: 0 },
+                    { label: '24', value: 24 },
+                    { label: '48', value: 48 },
+                    { label: '72', value: 72 },
+                  ]}
+                  onChange={setMargin}
+                />
               </div>
               {progress !== null && <Progress value={progress * 100} />}
               <div className="flex items-center gap-2">
@@ -241,14 +249,32 @@ export default function ConvertRoute() {
                     ]}
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label>Resolution ({dpi} DPI)</Label>
-                  <Slider min={72} max={300} value={[dpi]} onValueChange={([v]) => setDpi(v)} />
-                </div>
-                <div className="space-y-1">
-                  <Label>Quality ({quality}%)</Label>
-                  <Slider min={40} max={100} value={[quality]} onValueChange={([v]) => setQuality(v)} />
-                </div>
+                <SmoothSizeSlider
+                  label="Resolution"
+                  value={dpi}
+                  min={72}
+                  max={300}
+                  step={6}
+                  size="sm"
+                  showSteppers
+                  stepperStep={18}
+                  resetValue={150}
+                  formatValue={(v) => `${v} DPI`}
+                  onChange={setDpi}
+                />
+                <SmoothSizeSlider
+                  label="Quality"
+                  value={quality}
+                  min={40}
+                  max={100}
+                  step={1}
+                  size="sm"
+                  showSteppers
+                  stepperStep={5}
+                  resetValue={88}
+                  formatValue={(v) => `${v}%`}
+                  onChange={setQuality}
+                />
               </div>
               {progress !== null && <Progress value={progress * 100} />}
               <Button disabled={!pdfFile || progress !== null} onClick={runPdfToImages}>

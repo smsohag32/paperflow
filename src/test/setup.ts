@@ -34,3 +34,12 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
     dispatchEvent: () => false,
   })
 }
+
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  class ResizeObserverPolyfill {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  globalThis.ResizeObserver = ResizeObserverPolyfill as unknown as typeof ResizeObserver
+}

@@ -54,12 +54,15 @@ import {
   ArrowUp,
   ArrowDown,
   Search,
+  ArrowUpDown,
+  Stamp,
+  X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input, Label, Textarea } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { Slider } from '@/components/ui/slider'
+import { Slider, SmoothSizeSlider } from '@/components/ui/slider'
 import { SimpleSelect } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tip } from '@/components/ui/tooltip'
@@ -83,6 +86,7 @@ import { downloadBlob, pdfBlob } from '@/lib/utils/download'
 import { putAsset, addHistory } from '@/lib/storage/repo'
 import { listSignaturePresets } from '@/lib/image/signature'
 import { PasswordRequiredError } from '@/lib/pdf/pdfjs'
+import { getDocument } from '@/lib/pdf/render'
 import { useProfile } from '@/lib/performance/profile'
 import type { StoredSignature } from '@/lib/storage/db'
 import type { EditorTool, FontFamily, WorkspacePage } from '@/types/workspace'
@@ -185,6 +189,22 @@ const TOOL_BUTTONS: { id: EditorTool; label: string; icon: React.ComponentType<{
   { id: 'redact', label: 'Permanent Redact', icon: EyeOff },
 ]
 
+const STAMP_PRESETS = [
+  { label: 'APPROVED', color: '#15803d', bgColor: '#dcfce7' },
+  { label: 'CONFIDENTIAL', color: '#b91c1c', bgColor: '#fee2e2' },
+  { label: 'DRAFT', color: '#b45309', bgColor: '#fef3c7' },
+  { label: 'REVIEWED', color: '#1d4ed8', bgColor: '#dbeafe' },
+  { label: 'PAID', color: '#0f766e', bgColor: '#ccfbf1' },
+  { label: 'FINAL', color: '#6d28d9', bgColor: '#ede9fe' },
+]
+
+const STANDARD_PAGE_SIZES = [
+  { label: 'A4', width: 595.28, height: 841.89 },
+  { label: 'Letter', width: 612, height: 792 },
+  { label: 'Legal', width: 612, height: 1008 },
+  { label: 'A5', width: 419.53, height: 595.28 },
+]
+
 export default function WorkspaceRoute() {
   const doc = useWorkspace((s) => s.doc)
   const activePageId = useWorkspace((s) => s.activePageId)
@@ -203,16 +223,20 @@ export default function WorkspaceRoute() {
   const setActivePage = useWorkspace((s) => s.setActivePage)
   const toggleSelectPage = useWorkspace((s) => s.toggleSelectPage)
   const selectAllPages = useWorkspace((s) => s.selectAllPages)
+  const selectPagesByPattern = useWorkspace((s) => s.selectPagesByPattern)
+  const clearPageSelection = useWorkspace((s) => s.clearPageSelection)
   const setTool = useWorkspace((s) => s.setTool)
   const setToolStyle = useWorkspace((s) => s.setToolStyle)
   const setZoom = useWorkspace((s) => s.setZoom)
   const selectAnnotation = useWorkspace((s) => s.selectAnnotation)
   const reorderPages = useWorkspace((s) => s.reorderPages)
+  const reversePages = useWorkspace((s) => s.reversePages)
   const rotatePages = useWorkspace((s) => s.rotatePages)
   const deletePages = useWorkspace((s) => s.deletePages)
   const duplicatePage = useWorkspace((s) => s.duplicatePage)
   const insertBlankPage = useWorkspace((s) => s.insertBlankPage)
   const setCrop = useWorkspace((s) => s.setCrop)
+  const resizePages = useWorkspace((s) => s.resizePages)
   const addAnnotation = useWorkspace((s) => s.addAnnotation)
   const updateAnnotation = useWorkspace((s) => s.updateAnnotation)
   const deleteAnnotation = useWorkspace((s) => s.deleteAnnotation)
@@ -236,6 +260,11 @@ export default function WorkspaceRoute() {
   const [pwPrompt, setPwPrompt] = React.useState<{ file: File; append?: boolean; error?: string } | null>(null)
   const [searchOpen, setSearchOpen] = React.useState(false)
   const [pageJump, setPageJump] = React.useState('')
+  const [searchQuery, setSearchQuery] = React.useState('')
+  const [searchMatches, setSearchMatches] = React.useState<{ pageIndex: number; count: number; snippet: string }[]>([])
+  const [matchCursor, setMatchCursor] = React.useState(0)
+  const [searching, setSearching] = React.useState(false)
+  const searchInputRef = React.useRef<HTMLInputElement>(null)
 
   const openInputRef = React.useRef<HTMLInputElement>(null)
   const appendInputRef = React.useRef<HTMLInputElement>(null)
@@ -530,6 +559,116 @@ export default function WorkspaceRoute() {
     toast.success(`Placed "${sig.name}"`)
   }
 
+  const handlePlaceStamp = (stamp: (typeof STAMP_PRESETS)[number]) => {
+    if (!activePage) return
+    addAnnotation(activePage.id, {
+      type: 'text',
+      text: stamp.label,
+      fontFamily: 'Helvetica',
+      fontSize: 22,
+      color: stamp.color,
+      bgColor: stamp.bgColor,
+      bold: true,
+      align: 'center',
+      x: 0.32,
+      y: 0.14,
+      w: 0.34,
+      h: 0.065,
+      rotation: -12,
+      opacity: 0.9,
+    })
+    setTool('select')
+    toast.success(`Placed "${stamp.label}" stamp`)
+  }
+
+  // Focus search input when opened
+  React.useEffect(() => {
+    if (searchOpen) setTimeout(() => searchInputRef.current?.focus(), 40)
+  }, [searchOpen])
+
+  // Real in-document full-text search across all pages
+  const runTextSearch = React.useCallback(
+    async (query: string) => {
+      const q = query.trim().toLowerCase()
+      if (!doc || !q) {
+        setSearchMatches([])
+        setMatchCursor(0)
+        return
+      }
+      setSearching(true)
+      try {
+        const matches: { pageIndex: number; count: number; snippet: string }[] = []
+        const docCache = new Map<string, Awaited<ReturnType<typeof getDocument>>>()
+        for (let i = 0; i < doc.pages.length; i++) {
+          const p = doc.pages[i]
+          let text = ''
+          if (p.sourceId && p.sourcePageIndex >= 0) {
+            let pdf = docCache.get(p.sourceId)
+            if (!pdf) {
+              pdf = await getDocument(p.sourceId)
+              docCache.set(p.sourceId, pdf)
+            }
+            const page = await pdf.getPage(p.sourcePageIndex + 1)
+            const tc = await page.getTextContent()
+            text = tc.items.map((it) => ('str' in it ? it.str : '')).join(' ')
+          }
+          // Also include text annotations on the page
+          const annText = p.annotations
+            .map((a) => (a.type === 'text' || a.type === 'note' ? a.text : ''))
+            .join(' ')
+          const combined = `${text} ${annText}`.replace(/\s+/g, ' ').trim()
+          const lower = combined.toLowerCase()
+          let idx = lower.indexOf(q)
+          let count = 0
+          let firstIdx = -1
+          while (idx !== -1) {
+            if (firstIdx === -1) firstIdx = idx
+            count++
+            idx = lower.indexOf(q, idx + q.length)
+          }
+          if (count > 0) {
+            const start = Math.max(0, firstIdx - 28)
+            const end = Math.min(combined.length, firstIdx + q.length + 36)
+            matches.push({
+              pageIndex: i,
+              count,
+              snippet: `${start > 0 ? '…' : ''}${combined.slice(start, end)}${end < combined.length ? '…' : ''}`,
+            })
+          }
+        }
+        setSearchMatches(matches)
+        setMatchCursor(0)
+        if (matches.length > 0) goToPageIndex(matches[0].pageIndex)
+      } catch {
+        toast.error('Search failed on this document')
+      } finally {
+        setSearching(false)
+      }
+    },
+    [doc, goToPageIndex],
+  )
+
+  const stepSearchMatch = (dir: -1 | 1) => {
+    if (searchMatches.length === 0) return
+    const next = (matchCursor + dir + searchMatches.length) % searchMatches.length
+    setMatchCursor(next)
+    goToPageIndex(searchMatches[next].pageIndex)
+  }
+
+  // Smooth Ctrl + Mouse Wheel zoom in center viewer
+  React.useEffect(() => {
+    const el = centerRef.current
+    if (!el || !doc) return
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return
+      e.preventDefault()
+      const factor = e.deltaY < 0 ? 1.08 : 0.92
+      setZoom(Number((useWorkspace.getState().zoom * factor).toFixed(3)))
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [doc, setZoom])
+
   const fitWidth = () => {
     if (!activePage || !centerRef.current) return
     const avail = centerRef.current.clientWidth - 48
@@ -633,34 +772,38 @@ export default function WorkspaceRoute() {
 
             {selectedAnn.type === 'text' && (
               <>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label>Font</Label>
-                    <SimpleSelect
-                      size="sm"
-                      value={selectedAnn.fontFamily}
-                      onValueChange={(v) => updateAnnotation(activePage.id, selectedAnn.id, { fontFamily: v as FontFamily })}
-                      options={[
-                        { value: 'Helvetica', label: 'Sans' },
-                        { value: 'TimesRoman', label: 'Serif' },
-                        { value: 'Courier', label: 'Mono' },
-                      ]}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Size ({selectedAnn.fontSize}pt)</Label>
-                    <Input
-                      type="number"
-                      min={6}
-                      max={96}
-                      className="h-8"
-                      value={selectedAnn.fontSize}
-                      onChange={(e) =>
-                        updateAnnotation(activePage.id, selectedAnn.id, { fontSize: Number(e.target.value) || 12 })
-                      }
-                    />
-                  </div>
+                <div className="space-y-1">
+                  <Label>Font</Label>
+                  <SimpleSelect
+                    size="sm"
+                    value={selectedAnn.fontFamily}
+                    onValueChange={(v) => updateAnnotation(activePage.id, selectedAnn.id, { fontFamily: v as FontFamily })}
+                    options={[
+                      { value: 'Helvetica', label: 'Sans' },
+                      { value: 'TimesRoman', label: 'Serif' },
+                      { value: 'Courier', label: 'Mono' },
+                    ]}
+                  />
                 </div>
+                <SmoothSizeSlider
+                  label="Font size"
+                  value={selectedAnn.fontSize}
+                  min={6}
+                  max={96}
+                  step={1}
+                  size="sm"
+                  showSteppers
+                  resetValue={14}
+                  formatValue={(v) => `${v}pt`}
+                  presets={[
+                    { label: '10', value: 10 },
+                    { label: '14', value: 14 },
+                    { label: '18', value: 18 },
+                    { label: '24', value: 24 },
+                    { label: '36', value: 36 },
+                  ]}
+                  onChange={(v) => updateAnnotation(activePage.id, selectedAnn.id, { fontSize: v }, false)}
+                />
                 <div className="flex items-center gap-1">
                   <Button
                     size="xs"
@@ -696,25 +839,36 @@ export default function WorkspaceRoute() {
               </>
             )}
 
-            <div className="space-y-1.5">
-              <Label>Opacity ({Math.round((selectedAnn.opacity ?? 1) * 100)}%)</Label>
-              <Slider
-                min={10}
-                max={100}
-                value={[Math.round((selectedAnn.opacity ?? 1) * 100)]}
-                onValueChange={([v]) => updateAnnotation(activePage.id, selectedAnn.id, { opacity: v / 100 })}
-              />
-            </div>
+            <SmoothSizeSlider
+              label="Opacity"
+              value={Math.round((selectedAnn.opacity ?? 1) * 100)}
+              min={10}
+              max={100}
+              step={1}
+              size="sm"
+              resetValue={100}
+              formatValue={(v) => `${v}%`}
+              onChange={(v) => updateAnnotation(activePage.id, selectedAnn.id, { opacity: v / 100 }, false)}
+            />
 
-            <div className="space-y-1.5">
-              <Label>Rotation ({selectedAnn.rotation ?? 0}°)</Label>
-              <Slider
-                min={-180}
-                max={180}
-                value={[selectedAnn.rotation ?? 0]}
-                onValueChange={([v]) => updateAnnotation(activePage.id, selectedAnn.id, { rotation: v })}
-              />
-            </div>
+            <SmoothSizeSlider
+              label="Rotation"
+              value={selectedAnn.rotation ?? 0}
+              min={-180}
+              max={180}
+              step={1}
+              size="sm"
+              resetValue={0}
+              formatValue={(v) => `${v}°`}
+              presets={[
+                { label: '-90°', value: -90 },
+                { label: '-15°', value: -15 },
+                { label: '0°', value: 0 },
+                { label: '15°', value: 15 },
+                { label: '90°', value: 90 },
+              ]}
+              onChange={(v) => updateAnnotation(activePage.id, selectedAnn.id, { rotation: v }, false)}
+            />
           </div>
         ) : (
           <div className="space-y-3">
@@ -744,23 +898,64 @@ export default function WorkspaceRoute() {
                 />
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Stroke width ({toolStyle.strokeWidth}px)</Label>
-              <Slider
-                min={1}
-                max={12}
-                value={[toolStyle.strokeWidth]}
-                onValueChange={([v]) => setToolStyle({ strokeWidth: v })}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Font size ({toolStyle.fontSize}pt)</Label>
-              <Slider
-                min={8}
-                max={48}
-                value={[toolStyle.fontSize]}
-                onValueChange={([v]) => setToolStyle({ fontSize: v })}
-              />
+            <SmoothSizeSlider
+              label="Stroke width"
+              value={toolStyle.strokeWidth}
+              min={1}
+              max={14}
+              step={1}
+              size="sm"
+              showSteppers
+              resetValue={2}
+              formatValue={(v) => `${v}px`}
+              preview={
+                <span
+                  className="inline-block rounded-full"
+                  style={{
+                    width: `${Math.max(4, Math.min(16, toolStyle.strokeWidth + 2))}px`,
+                    height: `${Math.max(4, Math.min(16, toolStyle.strokeWidth + 2))}px`,
+                    backgroundColor: toolStyle.color,
+                  }}
+                />
+              }
+              onChange={(v) => setToolStyle({ strokeWidth: v })}
+            />
+            <SmoothSizeSlider
+              label="Font size"
+              value={toolStyle.fontSize}
+              min={8}
+              max={48}
+              step={1}
+              size="sm"
+              showSteppers
+              resetValue={14}
+              formatValue={(v) => `${v}pt`}
+              presets={[
+                { label: '10pt', value: 10 },
+                { label: '14pt', value: 14 },
+                { label: '20pt', value: 20 },
+                { label: '28pt', value: 28 },
+              ]}
+              onChange={(v) => setToolStyle({ fontSize: v })}
+            />
+            <Separator />
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5">
+                <Stamp className="size-3.5 text-primary" /> Quick Stamps
+              </Label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {STAMP_PRESETS.map((st) => (
+                  <button
+                    key={st.label}
+                    type="button"
+                    onClick={() => handlePlaceStamp(st)}
+                    style={{ color: st.color, borderColor: `${st.color}55`, backgroundColor: `${st.bgColor}66` }}
+                    className="rounded-md border px-2 py-1 text-[10px] font-bold tracking-wider transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    {st.label}
+                  </button>
+                ))}
+              </div>
             </div>
             <Separator />
             <div className="space-y-2">
@@ -828,6 +1023,70 @@ export default function WorkspaceRoute() {
               >
                 <Trash2 className="size-3.5 text-destructive" /> Delete
               </Button>
+            </div>
+            <Separator />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Batch organize</Label>
+                {selectedPageIds.length > 0 && (
+                  <Button variant="ghost" size="xs" onClick={clearPageSelection}>
+                    Clear ({selectedPageIds.length})
+                  </Button>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => {
+                    selectPagesByPattern('odd')
+                    toast.info('Selected odd pages')
+                  }}
+                >
+                  Odd
+                </Button>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => {
+                    selectPagesByPattern('even')
+                    toast.info('Selected even pages')
+                  }}
+                >
+                  Even
+                </Button>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  disabled={doc.pages.length < 2}
+                  onClick={() => {
+                    reversePages()
+                    toast.success('Reversed page order')
+                  }}
+                >
+                  <ArrowUpDown className="size-3" /> Reverse
+                </Button>
+              </div>
+            </div>
+            <Separator />
+            <div className="space-y-2">
+              <Label>Standardize page size</Label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {STANDARD_PAGE_SIZES.map((sz) => (
+                  <Button
+                    key={sz.label}
+                    variant="outline"
+                    size="xs"
+                    onClick={() => {
+                      const targets = selectedPageIds.length ? selectedPageIds : [activePage.id]
+                      resizePages(targets, sz.width, sz.height)
+                      toast.success(`Resized ${targets.length} page(s) to ${sz.label}`)
+                    }}
+                  >
+                    {sz.label}
+                  </Button>
+                ))}
+              </div>
             </div>
             <Separator />
             <div className="space-y-2">
@@ -919,15 +1178,39 @@ export default function WorkspaceRoute() {
                 onChange={(e) => setWatermark({ text: e.target.value })}
                 placeholder="CONFIDENTIAL"
               />
-              <div className="space-y-1">
-                <Label>Opacity ({Math.round(doc.watermark.opacity * 100)}%)</Label>
-                <Slider
-                  min={5}
-                  max={60}
-                  value={[Math.round(doc.watermark.opacity * 100)]}
-                  onValueChange={([v]) => setWatermark({ opacity: v / 100 })}
-                />
-              </div>
+              <SmoothSizeSlider
+                label="Opacity"
+                value={Math.round(doc.watermark.opacity * 100)}
+                min={5}
+                max={60}
+                step={1}
+                size="sm"
+                resetValue={18}
+                formatValue={(v) => `${v}%`}
+                onChange={(v) => setWatermark({ opacity: v / 100 })}
+              />
+              <SmoothSizeSlider
+                label="Font size"
+                value={doc.watermark.fontSize}
+                min={16}
+                max={120}
+                step={2}
+                size="sm"
+                resetValue={48}
+                formatValue={(v) => `${v}pt`}
+                onChange={(v) => setWatermark({ fontSize: v })}
+              />
+              <SmoothSizeSlider
+                label="Angle"
+                value={doc.watermark.rotation}
+                min={-90}
+                max={90}
+                step={5}
+                size="sm"
+                resetValue={-35}
+                formatValue={(v) => `${v}°`}
+                onChange={(v) => setWatermark({ rotation: v })}
+              />
               <div className="flex items-center justify-between">
                 <Label>Tile across page</Label>
                 <Switch
@@ -1135,28 +1418,85 @@ export default function WorkspaceRoute() {
         </div>
       </div>
 
-      {/* Quick page jump bar */}
+      {/* In-Document Full-Text Search & Page Jump Bar */}
       {searchOpen && (
-        <div className="flex items-center gap-2 border-b bg-secondary/40 px-4 py-1.5 text-xs">
-          <span>Jump to page:</span>
-          <Input
-            type="number"
-            min={1}
-            max={doc.pages.length}
-            value={pageJump}
-            onChange={(e) => setPageJump(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                const idx = parseInt(pageJump, 10) - 1
-                if (idx >= 0 && idx < doc.pages.length) goToPageIndex(idx)
-                setSearchOpen(false)
-              }
-            }}
-            className="h-7 w-20"
-            placeholder={`1–${doc.pages.length}`}
-          />
-          <Button variant="ghost" size="xs" onClick={() => setSearchOpen(false)}>
-            Close
+        <div className="flex flex-wrap items-center gap-2 border-b bg-secondary/40 px-4 py-1.5 text-xs">
+          <div className="flex items-center gap-1.5">
+            <Search className="size-3.5 text-muted-foreground" />
+            <Input
+              ref={searchInputRef}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  if (searchMatches.length > 0 && !searching) {
+                    stepSearchMatch(e.shiftKey ? -1 : 1)
+                  } else {
+                    runTextSearch(searchQuery)
+                  }
+                } else if (e.key === 'Escape') {
+                  setSearchOpen(false)
+                }
+              }}
+              className="h-7 w-52 text-xs"
+              placeholder="Find text in document…"
+            />
+            <Button
+              size="xs"
+              variant="secondary"
+              disabled={searching || !searchQuery.trim()}
+              onClick={() => runTextSearch(searchQuery)}
+            >
+              {searching ? 'Searching…' : 'Find'}
+            </Button>
+            {searchMatches.length > 0 && (
+              <>
+                <span className="text-muted-foreground tabular-nums">
+                  Page {searchMatches[matchCursor].pageIndex + 1} ({matchCursor + 1}/{searchMatches.length} pages)
+                </span>
+                <Button variant="ghost" size="icon-xs" onClick={() => stepSearchMatch(-1)} aria-label="Previous match">
+                  <ChevronLeft className="size-3.5" />
+                </Button>
+                <Button variant="ghost" size="icon-xs" onClick={() => stepSearchMatch(1)} aria-label="Next match">
+                  <ChevronRight className="size-3.5" />
+                </Button>
+              </>
+            )}
+            {!searching && searchQuery.trim() && searchMatches.length === 0 && (
+              <span className="text-muted-foreground">No matches</span>
+            )}
+          </div>
+
+          <Separator orientation="vertical" className="mx-1 hidden h-4 sm:block" />
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted-foreground">Go to page:</span>
+            <Input
+              type="number"
+              min={1}
+              max={doc.pages.length}
+              value={pageJump}
+              onChange={(e) => setPageJump(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const idx = parseInt(pageJump, 10) - 1
+                  if (idx >= 0 && idx < doc.pages.length) goToPageIndex(idx)
+                  setSearchOpen(false)
+                }
+              }}
+              className="h-7 w-18 text-xs"
+              placeholder={`1–${doc.pages.length}`}
+            />
+          </div>
+
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="ml-auto"
+            onClick={() => setSearchOpen(false)}
+            aria-label="Close search"
+          >
+            <X className="size-3.5" />
           </Button>
         </div>
       )}
@@ -1321,9 +1661,28 @@ export default function WorkspaceRoute() {
           </Button>
         </div>
         <div className="flex items-center gap-3">
-          <span className="hidden truncate sm:inline">{doc.name}</span>
+          <span className="hidden max-w-[200px] truncate md:inline">{doc.name}</span>
           {dirty && <Badge variant="warning">Unsaved edits</Badge>}
-          <span className="tabular-nums">{Math.round(zoom * 100)}%</span>
+          <div className="hidden w-36 items-center gap-2 sm:flex">
+            <Slider
+              size="sm"
+              min={25}
+              max={300}
+              step={5}
+              resetValue={100}
+              formatValue={(v) => `${v}%`}
+              value={[Math.round(zoom * 100)]}
+              onValueChange={([v]) => setZoom(v / 100)}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setZoom(1)}
+            title="Click to reset zoom to 100%"
+            className="w-10 text-right font-medium tabular-nums hover:text-foreground"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
         </div>
       </footer>
 

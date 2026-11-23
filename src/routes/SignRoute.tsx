@@ -17,7 +17,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input, Label } from '@/components/ui/input'
-import { Slider } from '@/components/ui/slider'
+import { Slider, SmoothSizeSlider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   deleteSignaturePreset,
@@ -275,9 +275,30 @@ export default function SignRoute() {
                       />
                     ))}
                   </div>
-                  <div className="flex w-32 items-center gap-2">
-                    <span className="text-xs text-muted-foreground">Size</span>
-                    <Slider min={1} max={10} value={[strokeWidth]} onValueChange={([v]) => setStrokeWidth(v)} />
+                  <div className="w-48">
+                    <SmoothSizeSlider
+                      label="Pen size"
+                      value={strokeWidth}
+                      min={1}
+                      max={12}
+                      step={0.5}
+                      size="sm"
+                      showSteppers
+                      stepperStep={1}
+                      resetValue={3}
+                      formatValue={(v) => `${v}px`}
+                      preview={
+                        <span
+                          className="inline-block rounded-full"
+                          style={{
+                            width: `${Math.max(4, Math.min(16, strokeWidth * 1.4))}px`,
+                            height: `${Math.max(4, Math.min(16, strokeWidth * 1.4))}px`,
+                            backgroundColor: eraserMode ? '#94a3b8' : inkColor,
+                          }}
+                        />
+                      }
+                      onChange={setStrokeWidth}
+                    />
                   </div>
                   <Button
                     size="xs"

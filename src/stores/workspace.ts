@@ -57,6 +57,7 @@ interface WorkspaceState {
   setActivePage: (pageId: string) => void
   toggleSelectPage: (pageId: string, multi?: boolean) => void
   selectAllPages: () => void
+  selectPagesByPattern: (pattern: 'odd' | 'even') => void
   clearPageSelection: () => void
   setTool: (tool: EditorTool) => void
   setToolStyle: (patch: Partial<WorkspaceState['toolStyle']>) => void
@@ -64,6 +65,7 @@ interface WorkspaceState {
   selectAnnotation: (id: string | null) => void
 
   reorderPages: (oldIndex: number, newIndex: number) => void
+  reversePages: () => void
   rotatePages: (pageIds: string[], delta: 90 | -90 | 180) => void
   deletePages: (pageIds: string[]) => void
   duplicatePage: (pageId: string) => void
@@ -331,6 +333,13 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         }
       }),
     selectAllPages: () => set((s) => ({ selectedPageIds: s.doc?.pages.map((p) => p.id) ?? [] })),
+    selectPagesByPattern: (pattern) =>
+      set((s) => ({
+        selectedPageIds:
+          s.doc?.pages
+            .filter((_, idx) => (pattern === 'odd' ? idx % 2 === 0 : idx % 2 === 1))
+            .map((p) => p.id) ?? [],
+      })),
     clearPageSelection: () => set({ selectedPageIds: [] }),
     setTool: (tool) => set({ tool }),
     setToolStyle: (patch) => set((s) => ({ toolStyle: { ...s.toolStyle, ...patch } })),
@@ -346,6 +355,10 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         pages.splice(newIndex, 0, moved)
         return { ...d, pages }
       })
+    },
+
+    reversePages: () => {
+      commit((d) => ({ ...d, pages: [...d.pages].reverse() }))
     },
 
     rotatePages: (pageIds, delta) => {

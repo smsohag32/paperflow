@@ -269,6 +269,8 @@ export default function EnhanceRoute() {
                   <Slider
                     min={0}
                     max={100}
+                    resetValue={35}
+                    formatValue={(v) => `${v}%`}
                     value={[settings.backgroundCleanup]}
                     onValueChange={([v]) => setSettings((s) => ({ ...s, preset: 'custom', backgroundCleanup: v }))}
                   />
@@ -278,6 +280,7 @@ export default function EnhanceRoute() {
                   <Slider
                     min={-40}
                     max={80}
+                    resetValue={0}
                     value={[settings.contrast]}
                     onValueChange={([v]) => setSettings((s) => ({ ...s, preset: 'custom', contrast: v }))}
                   />
@@ -287,6 +290,7 @@ export default function EnhanceRoute() {
                   <Slider
                     min={-40}
                     max={40}
+                    resetValue={0}
                     value={[settings.brightness]}
                     onValueChange={([v]) => setSettings((s) => ({ ...s, preset: 'custom', brightness: v }))}
                   />
@@ -296,6 +300,8 @@ export default function EnhanceRoute() {
                   <Slider
                     min={0}
                     max={100}
+                    resetValue={0}
+                    formatValue={(v) => `${v}%`}
                     value={[settings.sharpen]}
                     onValueChange={([v]) => setSettings((s) => ({ ...s, preset: 'custom', sharpen: v }))}
                   />
@@ -305,6 +311,8 @@ export default function EnhanceRoute() {
                   <Slider
                     min={0}
                     max={100}
+                    resetValue={0}
+                    formatValue={(v) => `${v}%`}
                     value={[settings.denoise]}
                     onValueChange={([v]) => setSettings((s) => ({ ...s, preset: 'custom', denoise: v }))}
                   />
@@ -315,6 +323,8 @@ export default function EnhanceRoute() {
                     min={-15}
                     max={15}
                     step={0.5}
+                    resetValue={0}
+                    formatValue={(v) => `${v.toFixed(1)}°`}
                     value={[Math.max(-15, Math.min(15, settings.rotation))]}
                     onValueChange={([v]) => setSettings((s) => ({ ...s, rotation: v }))}
                   />
