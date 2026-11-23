@@ -12,15 +12,15 @@ describe('UI components', () => {
     expect(screen.getByText('Browse files')).toBeInTheDocument()
   })
 
-  it('renders Dashboard with quick tools and local AI section', () => {
+  it('renders Dashboard with tools grid and recent documents', () => {
     render(
       <MemoryRouter>
         <DashboardRoute />
       </MemoryRouter>,
     )
-    expect(screen.getByText('Quick Tools')).toBeInTheDocument()
+    expect(screen.getByText('All Tools')).toBeInTheDocument()
     expect(screen.getAllByText('Merge PDF').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Compress PDF').length).toBeGreaterThan(0)
-    expect(screen.getByText('Local AI Tools')).toBeInTheDocument()
+    expect(screen.getAllByText('Compression Studio').length).toBeGreaterThan(0)
+    expect(screen.getByText('Recent Documents')).toBeInTheDocument()
   })
 })
