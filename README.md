@@ -1,6 +1,8 @@
 # PaperFlow AI
 
-**A free, privacy-first, AI-powered PDF productivity suite that runs entirely in your browser.**
+**A free, privacy-first, AI-powered PDF & document productivity suite that runs entirely in your browser.**
+
+**Live Demo:** [https://paperflow.sohagsheik.com/](https://paperflow.sohagsheik.com/)
 
 Zero subscriptions. Zero API keys. Zero cloud uploads. Zero watermarks. Engineered for fast startup and smooth performance even on low-end laptops and 4 GB RAM devices.
 
@@ -9,6 +11,7 @@ Zero subscriptions. Zero API keys. Zero cloud uploads. Zero watermarks. Engineer
 ## Features
 
 - **PDF Workspace (`/workspace`)**: View, reorder pages via drag-and-drop, rotate, duplicate, delete, insert blank pages, crop, add text/highlights/underlines/strikethroughs/freehand drawings/shapes/arrows/sticky notes/images/signatures, configure page numbers, headers/footers, watermarks, undo/redo, autosave & project recovery, and export.
+- **Markdown Viewer (`/markdown`)**: VS Code-style `.md` previewer & split editor with theme-aware styling, syntax-highlighted code blocks, resizable split panes & outline sidebar, interactive task lists, one-click copy (Plain Text, Markdown, HTML), and export to `.md`, themed `.html`, or Print/PDF.
 - **Merge PDF (`/merge`)**: Combine multiple PDFs in any order with drag-and-drop sorting.
 - **Split & Extract (`/split`)**: Split by custom ranges (`1-3, 4-6`), every N pages, every individual page (ZIP export), or extract specific pages (`odd`, `even`, `last`).
 - **Compression Studio (`/compress`)**: Adaptive compression pipeline with presets (`Light`, `Balanced`, `Strong`, `Maximum`, `Custom`), optional target size (`500 KB`, `1 MB`, `2 MB`, `5 MB`, custom), lossless structural optimization first, and transparent quality warnings.
@@ -67,9 +70,11 @@ src/
 │   ├── shared/          # ErrorBoundary, CommandPalette, Dialogs
 │   ├── upload/          # Accessible FileDropzone
 │   ├── pdf-viewer/      # On-demand IntersectionObserver PageThumbnail
-│   └── editor/          # Interactive PageCanvas with annotation overlays
+│   ├── editor/          # Interactive PageCanvas with annotation overlays
+│   └── markdown/        # VS Code-style GFM Markdown preview renderer
 ├── lib/
 │   ├── pdf/             # pdfjs loader, shared render queue + LRU cache, ops, export, compress, convert, extract
+│   ├── markdown/        # Zero-dependency GFM parser, HTML/text exporters & stats
 │   ├── image/           # Signature bg removal, scan enhancement & deskew
 │   ├── ocr/             # Tesseract.js local OCR & searchable PDF builder
 │   ├── ai/              # Curated open-source model catalog, Web Worker client, RAG chunking, resume audit
@@ -79,7 +84,7 @@ src/
 │   └── utils/           # Formatting, Blob download, worker ZIP
 ├── stores/              # Zustand stores (preferences, workspace, queue)
 ├── workers/             # Dedicated Web Workers (ai.worker.ts, zip.worker.ts)
-├── routes/              # 15 feature routes
+├── routes/              # 16 feature routes
 └── styles/              # Tailwind v4 design tokens & themes
 ```
 
@@ -137,3 +142,9 @@ You can override the mode anytime in `/settings`.
 - **Storage quota exceeded**: Open **Privacy (`/privacy`)** to clear cached previews, temporary files, or unused AI models.
 - **Slow AI inference**: Switch to **Light AI** (`SmolLM2 360M`) or enable WebGPU in **Settings → AI Acceleration**.
 - **OCR language download failed**: Check internet connectivity for the first download of a language pack; subsequent runs work offline from browser cache.
+
+---
+
+## License
+
+Released under the [MIT License](./LICENSE) © 2026 [Sohag Sheik](https://www.sohagsheik.com/).
