@@ -1,5 +1,5 @@
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
-import { closePdf, openPdf } from './pdfjs'
+import { closePdf, loadPdfjs, openPdf } from './pdfjs'
 import { TaskQueue, isAbortError } from '@/lib/performance/task-queue'
 import { LRUCache } from '@/lib/performance/lru'
 import { getProfile, onProfileChange } from '@/lib/performance/profile'
@@ -135,6 +135,40 @@ export async function drawPage(
     signal?.removeEventListener('abort', onAbort)
   }
   return outScale
+}
+
+/**
+ * Render PDF.js native selectable text layer into `container` aligned to `scale` & `rotation`.
+ */
+export async function renderTextLayer(
+  sourceId: string,
+  pageIndex: number,
+  container: HTMLDivElement,
+  opts: { scale: number; rotation?: number; signal?: AbortSignal },
+): Promise<void> {
+  const [lib, doc] = await Promise.all([loadPdfjs(), getDocument(sourceId)])
+  if (opts.signal?.aborted) return
+  const page = await doc.getPage(pageIndex + 1)
+  if (opts.signal?.aborted) return
+
+  const viewport = page.getViewport({ scale: opts.scale, rotation: opts.rotation ?? 0 })
+  container.replaceChildren()
+  container.style.setProperty('--scale-factor', String(opts.scale))
+  container.style.setProperty('--total-scale-factor', String(opts.scale))
+
+  const textLayer = new lib.TextLayer({
+    textContentSource: page.streamTextContent(),
+    container,
+    viewport,
+  })
+
+  const onAbort = () => textLayer.cancel()
+  opts.signal?.addEventListener('abort', onAbort, { once: true })
+  try {
+    await textLayer.render()
+  } finally {
+    opts.signal?.removeEventListener('abort', onAbort)
+  }
 }
 
 /* ───────────────────────── Thumbnail cache ───────────────────────── */

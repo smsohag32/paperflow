@@ -1158,7 +1158,12 @@ export default function WorkspaceRoute() {
           tabIndex={0}
           aria-label="PDF Page Viewer"
           onScroll={handleViewerScroll}
-          onPointerDown={() => centerRef.current?.focus({ preventScroll: true })}
+          onPointerDown={(e) => {
+            const el = e.target as HTMLElement | null
+            if (!el?.closest('.pf-text-layer')) {
+              centerRef.current?.focus({ preventScroll: true })
+            }
+          }}
           className="flex-1 overflow-auto bg-canvas px-4 py-6 outline-none scrollbar-thin sm:px-6"
         >
           <div

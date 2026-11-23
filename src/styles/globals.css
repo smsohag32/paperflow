@@ -174,3 +174,66 @@
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
 }
+
+/* PDF.js v6 native selectable text layer (exact geometry + smooth drag selection) */
+.pf-text-layer {
+  color-scheme: only light;
+  position: absolute;
+  text-align: initial;
+  inset: 0;
+  overflow: clip;
+  opacity: 1;
+  line-height: 1;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: var(--primary);
+  z-index: 1;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor, 1) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+.pf-text-layer :is(span, br) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+}
+.pf-text-layer > :not(.markedContent),
+.pf-text-layer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+.pf-text-layer .markedContent {
+  display: contents;
+}
+.pf-text-layer span[role='img'] {
+  user-select: none;
+  cursor: default;
+}
+.pf-text-layer ::selection {
+  background: oklch(0.55 0.19 268 / 28%);
+  color: transparent;
+}
+.pf-text-layer br::selection {
+  background: transparent;
+}
+.pf-text-layer .endOfContent {
+  display: block;
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: 0;
+  cursor: default;
+  user-select: none;
+}
+.pf-text-layer.selecting .endOfContent {
+  top: 0;
+}

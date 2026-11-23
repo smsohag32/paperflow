@@ -1,7 +1,8 @@
 import * as React from 'react'
-import { Trash2, Copy, Pencil } from 'lucide-react'
+import { Trash2, Copy, Pencil, Highlighter, Underline, Strikethrough, EyeOff } from 'lucide-react'
+import { toast } from 'sonner'
 import type { Annotation, AnnotationInput, EditorTool, WorkspacePage } from '@/types/workspace'
-import { renderPageToCanvas } from '@/lib/pdf/render'
+import { renderPageToCanvas, renderTextLayer } from '@/lib/pdf/render'
 import { getAsset } from '@/lib/storage/repo'
 import { cn } from '@/lib/utils/cn'
 
@@ -68,9 +69,17 @@ export function PageCanvas({
   onCropChange,
 }: PageCanvasProps) {
   const canvasRef = React.useRef<HTMLCanvasElement>(null)
+  const textLayerRef = React.useRef<HTMLDivElement>(null)
   const containerRef = React.useRef<HTMLDivElement>(null)
+  const selectingTextRef = React.useRef(false)
   const [rendering, setRendering] = React.useState(false)
   const [editingId, setEditingId] = React.useState<string | null>(null)
+  const [textSelection, setTextSelection] = React.useState<{
+    text: string
+    x: number
+    y: number
+    rects: { x: number; y: number; w: number; h: number }[]
+  } | null>(null)
 
   React.useEffect(() => {
     if (editingId && editingId !== selectedAnnotationId) setEditingId(null)
@@ -130,6 +139,174 @@ export function PageCanvas({
     return () => ac.abort()
   }, [page.sourceId, page.sourcePageIndex, page.rotation, page.bgColor, zoom, displayW, displayH])
 
+  // Render PDF.js native selectable text layer aligned with the rendered canvas
+  React.useEffect(() => {
+    const layer = textLayerRef.current
+    if (!layer) return
+    if (!page.sourceId) {
+      layer.replaceChildren()
+      return
+    }
+    const ac = new AbortController()
+    renderTextLayer(page.sourceId, page.sourcePageIndex, layer, {
+      scale: zoom,
+      rotation: page.rotation,
+      signal: ac.signal,
+    }).catch(() => {})
+    return () => {
+      ac.abort()
+      layer.replaceChildren()
+    }
+  }, [page.sourceId, page.sourcePageIndex, page.rotation, zoom])
+
+  // Clear floating text selection bar when switching away from Select tool
+  React.useEffect(() => {
+    if (tool !== 'select') setTextSelection(null)
+  }, [tool])
+
+  // Capture text selection inside this page's text layer (mouse drag or touch hold)
+  const updateSelectionBar = React.useCallback(() => {
+    if (tool !== 'select') {
+      setTextSelection(null)
+      return
+    }
+    const sel = window.getSelection()
+    const layer = textLayerRef.current
+    const box = containerRef.current
+    if (!sel || sel.isCollapsed || !layer || !box) {
+      setTextSelection(null)
+      return
+    }
+    const text = sel.toString().trim()
+    if (!text) {
+      setTextSelection(null)
+      return
+    }
+    const range = sel.getRangeAt(0)
+    if (!range.intersectsNode(layer)) {
+      setTextSelection(null)
+      return
+    }
+    const boxRect = box.getBoundingClientRect()
+    // Extract exact client rects from each selected text node inside this page's text layer
+    // (avoids phantom container/br rects on double-click or triple-click line selections)
+    const leafRects: DOMRect[] = []
+    const walker = document.createTreeWalker(layer, NodeFilter.SHOW_TEXT)
+    let node: Node | null
+    while ((node = walker.nextNode())) {
+      if (!node.textContent || !range.intersectsNode(node)) continue
+      const sub = document.createRange()
+      sub.selectNodeContents(node)
+      if (node === range.startContainer) sub.setStart(node, range.startOffset)
+      if (node === range.endContainer) sub.setEnd(node, range.endOffset)
+      for (const r of Array.from(sub.getClientRects())) {
+        if (r.width > 1 && r.height > 1 && r.height < boxRect.height * 0.25) {
+          leafRects.push(r)
+        }
+      }
+    }
+    const clientRects =
+      leafRects.length > 0
+        ? leafRects
+        : Array.from(range.getClientRects()).filter(
+            (r) => r.width > 1 && r.height > 1 && r.height < boxRect.height * 0.25,
+          )
+    if (clientRects.length === 0) {
+      setTextSelection(null)
+      return
+    }
+    const rawRects = clientRects
+      .map((r) => {
+        const left = Math.max(boxRect.left, r.left)
+        const top = Math.max(boxRect.top, r.top)
+        const right = Math.min(boxRect.right, r.right)
+        const bottom = Math.min(boxRect.bottom, r.bottom)
+        return {
+          x: (left - boxRect.left) / boxRect.width,
+          y: (top - boxRect.top) / boxRect.height,
+          w: Math.max(0, (right - left) / boxRect.width),
+          h: Math.max(0, (bottom - top) / boxRect.height),
+        }
+      })
+      .filter((r) => r.w > 0.001 && r.h > 0.001)
+    if (rawRects.length === 0) {
+      setTextSelection(null)
+      return
+    }
+    // Sort top-to-bottom, then left-to-right, and coalesce rects on the same text line
+    rawRects.sort((a, b) => (Math.abs(a.y - b.y) > Math.min(a.h, b.h) * 0.5 ? a.y - b.y : a.x - b.x))
+    const normRects: { x: number; y: number; w: number; h: number }[] = []
+    for (const r of rawRects) {
+      const prev = normRects[normRects.length - 1]
+      if (prev && Math.abs(prev.y - r.y) < Math.max(prev.h, r.h) * 0.6 && r.x <= prev.x + prev.w + 0.03) {
+        const right = Math.max(prev.x + prev.w, r.x + r.w)
+        const bottom = Math.max(prev.y + prev.h, r.y + r.h)
+        prev.x = Math.min(prev.x, r.x)
+        prev.y = Math.min(prev.y, r.y)
+        prev.w = right - prev.x
+        prev.h = bottom - prev.y
+      } else {
+        normRects.push({ ...r })
+      }
+    }
+    const first = normRects[0]
+    setTextSelection({
+      text,
+      x: Math.min(0.85, Math.max(0.15, first.x + first.w / 2)),
+      y: Math.max(0.02, first.y),
+      rects: normRects,
+    })
+  }, [tool])
+
+  React.useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const onSelChange = () => {
+      const sel = window.getSelection()
+      if (!sel || sel.isCollapsed) {
+        setTextSelection(null)
+        return
+      }
+      // Don't re-render on every mousemove while actively dragging with mouse
+      if (selectingTextRef.current) return
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => updateSelectionBar(), 120)
+    }
+    const onGlobalPointerUp = () => {
+      if (!selectingTextRef.current) return
+      selectingTextRef.current = false
+      textLayerRef.current?.classList.remove('selecting')
+      requestAnimationFrame(() => updateSelectionBar())
+    }
+    document.addEventListener('selectionchange', onSelChange)
+    window.addEventListener('pointerup', onGlobalPointerUp)
+    return () => {
+      if (timer) clearTimeout(timer)
+      document.removeEventListener('selectionchange', onSelChange)
+      window.removeEventListener('pointerup', onGlobalPointerUp)
+    }
+  }, [updateSelectionBar])
+
+  const applySelectionMarkup = (kind: 'highlight' | 'underline' | 'strike' | 'redact') => {
+    if (!textSelection) return
+    for (const r of textSelection.rects) {
+      if (kind === 'redact') {
+        onAddAnnotation({ type: 'redact', x: r.x, y: r.y, w: r.w, h: r.h, color: '#000000' })
+      } else {
+        onAddAnnotation({
+          type: kind,
+          x: r.x,
+          y: r.y,
+          w: r.w,
+          h: r.h,
+          color: kind === 'highlight' ? '#fde047' : kind === 'underline' ? '#f59e0b' : '#ef4444',
+          opacity: kind === 'highlight' ? 0.38 : 0.9,
+        })
+      }
+    }
+    window.getSelection()?.removeAllRanges()
+    setTextSelection(null)
+  }
+
   // Release GPU/RAM canvas buffer when virtualized page unmounts
   React.useEffect(() => {
     const canvas = canvasRef.current
@@ -152,9 +329,15 @@ export function PageCanvas({
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return
     if (tool === 'select' || tool === 'pan') {
-      if (e.target === e.currentTarget) {
+      const target = e.target as Node
+      if (e.target === e.currentTarget || textLayerRef.current?.contains(target)) {
         onSelectAnnotation(null)
         setEditingId(null)
+        if (tool === 'select' && textLayerRef.current?.contains(target)) {
+          selectingTextRef.current = true
+          setTextSelection(null)
+          textLayerRef.current.classList.add('selecting')
+        }
       }
       return
     }
@@ -304,14 +487,97 @@ export function PageCanvas({
       ref={containerRef}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
+      onPointerUp={(e) => {
+        handlePointerUp()
+        if (tool === 'select' && e.button === 0) {
+          requestAnimationFrame(updateSelectionBar)
+        }
+      }}
       style={{ width: displayW, height: displayH }}
       className={cn(
-        'relative mx-auto shrink-0 bg-white page-shadow select-none',
-        tool === 'pan' ? 'cursor-grab' : tool === 'select' ? 'cursor-default' : 'cursor-crosshair',
+        'relative mx-auto shrink-0 bg-white page-shadow',
+        tool === 'select' ? 'cursor-default select-text' : 'select-none',
+        tool === 'pan' ? 'cursor-grab' : tool === 'select' ? '' : 'cursor-crosshair',
       )}
     >
       <canvas ref={canvasRef} className="pointer-events-none block size-full" />
+
+      {/* Native PDF.js Selectable Text Layer */}
+      <div
+        ref={textLayerRef}
+        onDoubleClick={() => {
+          if (tool === 'select') requestAnimationFrame(updateSelectionBar)
+        }}
+        className={cn(
+          'pf-text-layer',
+          tool === 'select' ? 'pointer-events-auto select-text' : 'pointer-events-none select-none',
+        )}
+      />
+
+      {/* Floating quick action bar for selected PDF text */}
+      {textSelection && tool === 'select' && (
+        <div
+          onMouseDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+          }}
+          onPointerDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+          }}
+          style={{
+            left: `${textSelection.x * 100}%`,
+            top: `${textSelection.y * 100}%`,
+          }}
+          className="absolute z-30 flex -translate-x-1/2 -translate-y-[calc(100%+8px)] items-center gap-0.5 rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg"
+        >
+          <button
+            type="button"
+            title="Copy selected text"
+            onClick={() => {
+              navigator.clipboard.writeText(textSelection.text).catch(() => {})
+              toast.success('Copied selected text')
+              window.getSelection()?.removeAllRanges()
+              setTextSelection(null)
+            }}
+            className="flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium hover:bg-secondary"
+          >
+            <Copy className="size-3.5" /> Copy
+          </button>
+          <button
+            type="button"
+            title="Highlight selection"
+            onClick={() => applySelectionMarkup('highlight')}
+            className="flex size-7 items-center justify-center rounded-md hover:bg-secondary"
+          >
+            <Highlighter className="size-3.5 text-amber-500" />
+          </button>
+          <button
+            type="button"
+            title="Underline selection"
+            onClick={() => applySelectionMarkup('underline')}
+            className="flex size-7 items-center justify-center rounded-md hover:bg-secondary"
+          >
+            <Underline className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            title="Strikethrough selection"
+            onClick={() => applySelectionMarkup('strike')}
+            className="flex size-7 items-center justify-center rounded-md hover:bg-secondary"
+          >
+            <Strikethrough className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            title="Permanently redact selection"
+            onClick={() => applySelectionMarkup('redact')}
+            className="flex size-7 items-center justify-center rounded-md text-destructive hover:bg-destructive/10"
+          >
+            <EyeOff className="size-3.5" />
+          </button>
+        </div>
+      )}
 
       {rendering && (
         <div className="pointer-events-none absolute right-2 bottom-2 rounded bg-background/85 px-2 py-0.5 text-[11px] text-muted-foreground shadow-xs">
@@ -381,8 +647,12 @@ export function PageCanvas({
         const isEditing = editingId === ann.id && (ann.type === 'text' || ann.type === 'note')
         const left = ann.type === 'line' || ann.type === 'arrow' ? Math.min(ann.x, ann.x + ann.w) : ann.x
         const top = ann.type === 'line' || ann.type === 'arrow' ? Math.min(ann.y, ann.y + ann.h) : ann.y
-        const width = Math.max(0.02, Math.abs(ann.w))
-        const height = Math.max(0.02, Math.abs(ann.h))
+        const minSize =
+          ann.type === 'highlight' || ann.type === 'underline' || ann.type === 'strike' || ann.type === 'redact'
+            ? 0.004
+            : 0.02
+        const width = Math.max(minSize, Math.abs(ann.w))
+        const height = Math.max(minSize, Math.abs(ann.h))
 
         return (
           <div
@@ -424,6 +694,7 @@ export function PageCanvas({
             }}
             className={cn(
               'absolute rounded-[2px] transition-[box-shadow]',
+              ann.type === 'highlight' && 'mix-blend-multiply',
               tool === 'select' && !isEditing && 'cursor-move hover:ring-1 hover:ring-primary/50',
               selected && 'ring-2 ring-primary ring-offset-1',
             )}
@@ -482,7 +753,9 @@ export function PageCanvas({
                 </div>
               ))}
 
-            {ann.type === 'highlight' && <div className="size-full rounded-[2px]" style={{ backgroundColor: ann.color }} />}
+            {ann.type === 'highlight' && (
+              <div className="size-full rounded-[2px] mix-blend-multiply" style={{ backgroundColor: ann.color }} />
+            )}
             {ann.type === 'underline' && (
               <div className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: ann.color }} />
             )}
