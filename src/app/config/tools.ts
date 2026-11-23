@@ -1,0 +1,175 @@
+import {
+  Combine,
+  Scissors,
+  Minimize2,
+  PenTool,
+  ScanText,
+  ArrowLeftRight,
+  Sparkles,
+  Wand2,
+  ShieldCheck,
+  Table2,
+  FileEdit,
+  Layers,
+  type LucideIcon,
+} from 'lucide-react'
+
+export type ToolCategory = 'organize' | 'edit' | 'optimize' | 'convert' | 'scan' | 'ai' | 'security'
+
+export interface ToolDef {
+  id: string
+  name: string
+  shortName: string
+  description: string
+  route: string
+  icon: LucideIcon
+  category: ToolCategory
+  keywords: string[]
+  quick?: boolean
+  ai?: boolean
+}
+
+export const TOOLS: ToolDef[] = [
+  {
+    id: 'workspace',
+    name: 'PDF Workspace',
+    shortName: 'Edit PDF',
+    description: 'View, organize, annotate, crop, watermark, number, and export PDFs.',
+    route: '/workspace',
+    icon: FileEdit,
+    category: 'edit',
+    keywords: ['edit', 'annotate', 'text', 'draw', 'highlight', 'crop', 'watermark', 'header', 'footer', 'numbers', 'reorder'],
+    quick: true,
+  },
+  {
+    id: 'merge',
+    name: 'Merge PDF',
+    shortName: 'Merge PDF',
+    description: 'Combine multiple PDFs into one document in any page order.',
+    route: '/merge',
+    icon: Combine,
+    category: 'organize',
+    keywords: ['combine', 'join', 'append', 'concat', 'pdfs'],
+    quick: true,
+  },
+  {
+    id: 'split',
+    name: 'Split & Extract',
+    shortName: 'Split PDF',
+    description: 'Split by page ranges, every N pages, or extract individual pages.',
+    route: '/split',
+    icon: Scissors,
+    category: 'organize',
+    keywords: ['extract', 'separate', 'cut', 'ranges', 'pages'],
+    quick: true,
+  },
+  {
+    id: 'compress',
+    name: 'Compression Studio',
+    shortName: 'Compress PDF',
+    description: 'Reduce file size with presets or an adaptive target size.',
+    route: '/compress',
+    icon: Minimize2,
+    category: 'optimize',
+    keywords: ['shrink', 'reduce', 'optimize', 'target size', 'kb', 'mb', 'grayscale'],
+    quick: true,
+  },
+  {
+    id: 'sign',
+    name: 'Signature Studio',
+    shortName: 'Sign PDF',
+    description: 'Draw or upload signatures, auto-remove backgrounds, and place on pages.',
+    route: '/sign',
+    icon: PenTool,
+    category: 'edit',
+    keywords: ['signature', 'initials', 'handwritten', 'stamp', 'transparent', 'date'],
+    quick: true,
+  },
+  {
+    id: 'convert',
+    name: 'Convert Studio',
+    shortName: 'Convert PDF',
+    description: 'Convert between PDF, Images, Text, HTML, and DOCX locally.',
+    route: '/convert',
+    icon: ArrowLeftRight,
+    category: 'convert',
+    keywords: ['jpg', 'png', 'webp', 'images', 'text', 'html', 'docx', 'word', 'zip'],
+    quick: true,
+  },
+  {
+    id: 'ocr',
+    name: 'OCR & Searchable PDF',
+    shortName: 'OCR',
+    description: 'Extract text from scanned pages and build searchable PDFs locally.',
+    route: '/ocr',
+    icon: ScanText,
+    category: 'scan',
+    keywords: ['tesseract', 'scan', 'recognize', 'bangla', 'english', 'searchable'],
+    quick: true,
+  },
+  {
+    id: 'enhance',
+    name: 'Scan Enhancement',
+    shortName: 'Scan Enhance',
+    description: 'Deskew, sharpen, clean backgrounds, and enhance scanned documents.',
+    route: '/enhance',
+    icon: Wand2,
+    category: 'scan',
+    keywords: ['deskew', 'denoise', 'contrast', 'receipt', 'document', 'cleanup', 'shadow'],
+    quick: true,
+  },
+  {
+    id: 'ai',
+    name: 'AI Workspace',
+    shortName: 'AI Assistant',
+    description: 'Summarize, ask questions, translate, and analyze resumes with local AI.',
+    route: '/ai',
+    icon: Sparkles,
+    category: 'ai',
+    keywords: ['summarize', 'chat', 'qa', 'translate', 'bangla', 'resume', 'cv', 'flashcards', 'study', 'local'],
+    ai: true,
+  },
+  {
+    id: 'extract',
+    name: 'Extract & Intelligence',
+    shortName: 'Extract Data',
+    description: 'Extract text and tables (CSV/JSON), classify documents, and audit pages.',
+    route: '/extract',
+    icon: Table2,
+    category: 'ai',
+    keywords: ['tables', 'csv', 'json', 'text', 'blank pages', 'duplicates', 'classify'],
+    ai: true,
+  },
+  {
+    id: 'protect',
+    name: 'Security & Redaction',
+    shortName: 'Protect & Redact',
+    description: 'Encrypt with AES-256, unlock, edit/strip metadata, and permanently redact.',
+    route: '/protect',
+    icon: ShieldCheck,
+    category: 'security',
+    keywords: ['password', 'encrypt', 'unlock', 'redact', 'metadata', 'pii', 'sensitive', 'privacy'],
+  },
+  {
+    id: 'batch',
+    name: 'Batch & Queue',
+    shortName: 'Batch Process',
+    description: 'Process multiple files together with bounded concurrency and ZIP export.',
+    route: '/tools?tab=batch',
+    icon: Layers,
+    category: 'optimize',
+    keywords: ['bulk', 'multiple', 'queue', 'rename', 'zip'],
+  },
+]
+
+export const TOOL_BY_ID = Object.fromEntries(TOOLS.map((t) => [t.id, t])) as Record<string, ToolDef>
+
+export const CATEGORY_LABELS: Record<ToolCategory, string> = {
+  organize: 'Organize',
+  edit: 'Edit & Sign',
+  optimize: 'Optimize & Batch',
+  convert: 'Convert',
+  scan: 'Scan & OCR',
+  ai: 'Local AI & Data',
+  security: 'Security & Privacy',
+}

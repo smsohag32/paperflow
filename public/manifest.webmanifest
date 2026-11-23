@@ -1,0 +1,16 @@
+{
+  "name": "PaperFlow AI",
+  "short_name": "PaperFlow",
+  "description": "Free, private, AI-powered PDF productivity suite running locally in your browser.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

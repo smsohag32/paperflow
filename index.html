@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="PaperFlow AI — free, private PDF tools with local AI. Merge, split, compress, sign, OCR and more. Files never leave your device." />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b0b0f" media="(prefers-color-scheme: dark)" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>PaperFlow AI — Private PDF workspace</title>
+    <script>
+      // Apply theme before first paint to avoid a flash of the wrong theme.
+      try {
+        var p = JSON.parse(localStorage.getItem('pf-preferences') || '{}')
+        var t = (p.state && p.state.theme) || 'system'
+        var dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
+        if (dark) document.documentElement.classList.add('dark')
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>PaperFlow AI needs JavaScript to process PDFs locally in your browser.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
