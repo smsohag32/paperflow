@@ -251,7 +251,7 @@ export function analyzeResume(resumeText: string, jobDescription = '', fileSizeB
 
   const words = resumeText.trim().split(/\s+/).filter(Boolean)
   const hasContact = /@/.test(resumeText)
-  const hasMetrics = /\b\d+(?:%|\+|x|k|m|\s*(?:years|months|users|clients))\b/i.test(resumeText)
+  const hasMetrics = /\b\d+(?:%|\+|(?:x|k|m|\s*(?:years|months|users|clients))\b)/i.test(resumeText)
   const suggestions: string[] = []
 
   if (!hasContact) suggestions.push('Include a clear email address in your contact header.')

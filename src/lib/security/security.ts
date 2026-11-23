@@ -118,8 +118,17 @@ export async function encryptPdf(
  */
 export async function unlockPdf(file: Blob | Uint8Array, password: string): Promise<Uint8Array> {
   if (!password) throw new Error('Enter the document password to unlock it.')
-  const doc = await loadPdfDoc(file, { password, updateMetadata: false })
-  return savePdf(doc)
+  const src = await loadPdfDoc(file, { password, updateMetadata: false })
+  const { PDFDocument } = await loadPdfLib()
+  const out = await PDFDocument.create()
+  const pages = await out.copyPages(src, src.getPageIndices())
+  pages.forEach((p) => out.addPage(p))
+  const t = src.getTitle()
+  if (t) out.setTitle(t)
+  const a = src.getAuthor()
+  if (a) out.setAuthor(a)
+  out.setProducer('PaperFlow AI')
+  return savePdf(out)
 }
 
 const PATTERNS: { kind: SensitiveMatch['kind']; regex: RegExp }[] = [
