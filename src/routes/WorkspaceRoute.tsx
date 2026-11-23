@@ -120,6 +120,7 @@ function SortableThumb({
       <ContextMenuTrigger asChild>
         <div
           ref={setNodeRef}
+          data-thumb-id={page.id}
           style={{ transform: CSS.Transform.toString(transform), transition }}
           {...attributes}
           {...listeners}
@@ -240,6 +241,17 @@ export default function WorkspaceRoute() {
   const appendInputRef = React.useRef<HTMLInputElement>(null)
   const imgInputRef = React.useRef<HTMLInputElement>(null)
   const centerRef = React.useRef<HTMLDivElement>(null)
+  const thumbListRef = React.useRef<HTMLDivElement>(null)
+
+  // Keep active page thumbnail scrolled to the top of the left sidebar
+  React.useEffect(() => {
+    if (!activePageId || !thumbListRef.current) return
+    const el = thumbListRef.current.querySelector<HTMLElement>(`[data-thumb-id="${CSS.escape(activePageId)}"]`)
+    if (!el) return
+    const container = thumbListRef.current
+    const targetTop = Math.max(0, el.offsetTop - 8)
+    container.scrollTo({ top: targetTop, behavior: 'smooth' })
+  }, [activePageId])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -345,6 +357,27 @@ export default function WorkspaceRoute() {
       } else {
         toast.error(e instanceof Error ? e.message : 'Failed to open file')
       }
+    }
+  }
+
+  const handleOpenFiles = async (files: File[], append = false) => {
+    if (files.length === 0) return
+    if (files.length === 1) {
+      await handleOpen(files[0], append)
+      return
+    }
+    try {
+      const prepared = await Promise.all(files.map((f) => ensurePdfFile(f)))
+      if (append) {
+        for (const p of prepared) await appendFile(p.file)
+        toast.success(`Merged & appended ${prepared.length} files`)
+      } else {
+        await openFile(prepared[0].file)
+        for (let i = 1; i < prepared.length; i++) await appendFile(prepared[i].file)
+        toast.success(`Merged & opened ${prepared.length} files in Workspace`)
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to open files')
     }
   }
 
@@ -524,10 +557,11 @@ export default function WorkspaceRoute() {
           </p>
         </div>
         <FileDropzone
+          multiple
           accept={ACCEPTED_UNIVERSAL_FILES}
-          onFiles={(files) => files[0] && handleOpen(files[0])}
-          title="Drop a PDF, Markdown (.md), Word (.docx), or image"
-          description="Non-PDF files are converted automatically and opened right here"
+          onFiles={(files) => files.length && handleOpenFiles(files, false)}
+          title="Drop one or multiple PDFs, Markdown (.md), Word (.docx), or images"
+          description="Select 1 file to open it directly, or multiple files to auto-convert & merge them into one Workspace"
         />
         <PasswordDialog
           open={!!pwPrompt}
@@ -954,22 +988,24 @@ export default function WorkspaceRoute() {
       <input
         ref={openInputRef}
         type="file"
+        multiple
         accept={ACCEPTED_UNIVERSAL_FILES}
         className="sr-only"
         onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (f) handleOpen(f, false)
+          const list = e.target.files ? Array.from(e.target.files) : []
+          if (list.length) handleOpenFiles(list, false)
           e.target.value = ''
         }}
       />
       <input
         ref={appendInputRef}
         type="file"
+        multiple
         accept={ACCEPTED_UNIVERSAL_FILES}
         className="sr-only"
         onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (f) handleOpen(f, true)
+          const list = e.target.files ? Array.from(e.target.files) : []
+          if (list.length) handleOpenFiles(list, true)
           e.target.value = ''
         }}
       />

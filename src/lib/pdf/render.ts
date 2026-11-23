@@ -3,6 +3,8 @@ import { closePdf, loadPdfjs, openPdf } from './pdfjs'
 import { TaskQueue, isAbortError } from '@/lib/performance/task-queue'
 import { LRUCache } from '@/lib/performance/lru'
 import { getProfile, onProfileChange } from '@/lib/performance/profile'
+import { kvGet } from '@/lib/storage/db'
+import type { UnicodeTextSpan } from './convert'
 
 /**
  * Shared PDF.js document registry + render queue.
@@ -168,6 +170,33 @@ export async function renderTextLayer(
     await textLayer.render()
   } finally {
     opts.signal?.removeEventListener('abort', onAbort)
+  }
+
+  // Fallback for locally converted Unicode (e.g. Bangla .md / .txt) PDFs:
+  // mount the exact recorded selectable text spans into the text layer.
+  if (!opts.signal?.aborted && container.querySelectorAll('span').length === 0) {
+    const customPages = await kvGet<UnicodeTextSpan[][]>(`textlayer:${sourceId}`).catch(() => undefined)
+    const spans = customPages?.[pageIndex]
+    if (!opts.signal?.aborted && spans?.length) {
+      const frag = document.createDocumentFragment()
+      for (const s of spans) {
+        const el = document.createElement('span')
+        el.textContent = s.text
+        el.style.left = `${s.x * 100}%`
+        el.style.top = `${s.y * 100}%`
+        el.style.width = `${s.w * 100}%`
+        el.style.height = `${s.h * 100}%`
+        el.style.setProperty('--font-height', `${s.fontSize}px`)
+        el.style.fontFamily =
+          "'Noto Sans Bengali', 'Hind Siliguri', 'Nirmala UI', 'Vrinda', 'Inter', system-ui, sans-serif"
+        frag.appendChild(el)
+        frag.appendChild(document.createElement('br'))
+      }
+      const end = document.createElement('div')
+      end.className = 'endOfContent'
+      frag.appendChild(end)
+      container.replaceChildren(frag)
+    }
   }
 }
 

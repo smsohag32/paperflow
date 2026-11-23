@@ -75,6 +75,7 @@ export function AppShell() {
   const reduceMotion = usePreferences((s) => s.reduceMotion)
   const setPref = usePreferences((s) => s.set)
   const openFile = useWorkspace((s) => s.openFile)
+  const appendFile = useWorkspace((s) => s.appendFile)
 
   const jobs = useQueueStore((s) => s.jobs)
   const paused = useQueueStore((s) => s.paused)
@@ -123,12 +124,22 @@ export function AppShell() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  const handleGlobalUpload = async (file: File) => {
+  const handleGlobalUpload = async (files: File[]) => {
+    if (files.length === 0) return
     try {
-      const { file: pdfFile, converted } = await ensurePdfFile(file)
-      await openFile(pdfFile)
+      const prepared = await Promise.all(files.map((f) => ensurePdfFile(f)))
+      await openFile(prepared[0].file)
+      for (let i = 1; i < prepared.length; i++) {
+        await appendFile(prepared[i].file)
+      }
       navigate('/workspace')
-      toast.success(converted ? `Converted ${file.name} to PDF & opened` : `Opened ${file.name}`)
+      if (prepared.length > 1) {
+        toast.success(`Merged & opened ${prepared.length} files in Workspace`)
+      } else {
+        toast.success(
+          prepared[0].converted ? `Converted ${files[0].name} to PDF & opened` : `Opened ${files[0].name}`,
+        )
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not open file')
     }
@@ -140,7 +151,7 @@ export function AppShell() {
       toast.error('File no longer available in local storage.')
       return
     }
-    await handleGlobalUpload(found.file)
+    await handleGlobalUpload([found.file])
   }
 
   const SidebarNav = ({ isMobile = false }: { isMobile?: boolean }) => {
@@ -290,11 +301,12 @@ export function AppShell() {
       <input
         ref={uploadInputRef}
         type="file"
+        multiple
         accept={ACCEPTED_UNIVERSAL_FILES}
         className="sr-only"
         onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (f) handleGlobalUpload(f)
+          const list = e.target.files ? Array.from(e.target.files) : []
+          if (list.length) handleGlobalUpload(list)
           e.target.value = ''
         }}
       />

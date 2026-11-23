@@ -17,6 +17,7 @@ import {
 import { addLibraryFile, getLibraryBlob } from '@/lib/storage/repo'
 import { getDB, kvDelete, kvGet, kvSet, safeWrite } from '@/lib/storage/db'
 import { getDocument, registerSource, releaseDocument } from '@/lib/pdf/render'
+import { convertedTextLayers } from '@/lib/pdf/convert'
 
 const AUTOSAVE_KEY = 'autosave:workspace'
 const MAX_HISTORY = 40
@@ -110,6 +111,10 @@ async function buildPagesFromFile(
     sourceId = meta.id
   }
   const sid = sourceId
+  const customSpans = convertedTextLayers.get(file)
+  if (customSpans) {
+    await kvSet(`textlayer:${sid}`, customSpans).catch(() => {})
+  }
   registerSource(sid, async () => {
     const blob = await getLibraryBlob(sid)
     if (!blob) throw new Error('Document file is no longer in local storage.')

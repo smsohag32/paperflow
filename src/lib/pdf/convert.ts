@@ -154,6 +154,20 @@ export async function pdfToImages(file: File, opts: PdfToImagesOptions): Promise
   }
 }
 
+export interface UnicodeTextSpan {
+  text: string
+  /** Normalized 0..1 coordinates (top-left origin) */
+  x: number
+  y: number
+  w: number
+  h: number
+  /** Font size in PDF points (scale = 1) */
+  fontSize: number
+}
+
+/** Transient side-channel map from converted File → per-page Unicode selectable text spans. */
+export const convertedTextLayers = new WeakMap<File, UnicodeTextSpan[][]>()
+
 const UNICODE_FONT_STACK =
   "'Noto Sans Bengali', 'Hind Siliguri', 'Nirmala UI', 'Vrinda', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif"
 const MONO_FONT_STACK = "ui-monospace, 'Cascadia Code', Consolas, Menlo, monospace"
@@ -165,12 +179,13 @@ function hasNonWinAnsi(text: string) {
 /**
  * Browser-native Canvas 2D renderer for Unicode (Bangla, Arabic, Hindi, CJK, Emoji)
  * Markdown & plain text documents. Uses the OS text shaper (HarfBuzz/DirectWrite)
- * so Bengali conjuncts (যুক্তবর্ণ) and vowel signs (কার) render 100% accurately.
+ * so Bengali conjuncts (যুক্তবর্ণ) and vowel signs (কার) render 100% accurately,
+ * and records exact line coordinates so every word is selectable & highlightable in Workspace.
  */
 async function renderUnicodeDocToPdf(
   content: string,
   opts: { isMarkdown: boolean; title?: string; pageSize?: 'a4' | 'letter'; margin?: number },
-): Promise<Uint8Array> {
+): Promise<{ bytes: Uint8Array; textPages: UnicodeTextSpan[][] }> {
   const { PDFDocument } = await loadPdfLib()
   const doc = await PDFDocument.create()
   const size = PAGE_SIZES[opts.pageSize ?? 'a4']
@@ -187,12 +202,29 @@ async function renderUnicodeDocToPdf(
 
   let y = margin
   let pageDirty = false
+  const textPages: UnicodeTextSpan[][] = []
+  let curPageSpans: UnicodeTextSpan[] = []
+
+  const drawTrackedText = (text: string, xPx: number, yPx: number, fontSizePx: number) => {
+    if (!text) return
+    ctx.fillText(text, xPx, yPx)
+    const measuredW = ctx.measureText(text).width
+    curPageSpans.push({
+      text,
+      x: xPx / pageW,
+      y: yPx / pageH,
+      w: Math.min(1 - xPx / pageW, measuredW / pageW),
+      h: (fontSizePx * 1.25) / pageH,
+      fontSize: fontSizePx / scale,
+    })
+  }
 
   const startNewPage = () => {
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, pageW, pageH)
     y = margin
     pageDirty = false
+    curPageSpans = []
   }
 
   const flushPage = async () => {
@@ -203,6 +235,7 @@ async function renderUnicodeDocToPdf(
     const img = await doc.embedJpg(new Uint8Array(await blob.arrayBuffer()))
     const p = doc.addPage([size.width, size.height])
     p.drawImage(img, { x: 0, y: 0, width: size.width, height: size.height })
+    textPages.push(curPageSpans)
     startNewPage()
   }
 
@@ -265,7 +298,7 @@ async function renderUnicodeDocToPdf(
     ctx.fillStyle = '#18181b'
     for (const l of wrapCanvasText(opts.title, font, maxW)) {
       await ensureSpace(24 * scale)
-      ctx.fillText(l, margin, y)
+      drawTrackedText(l, margin, y, 17 * scale)
       y += 23 * scale
       pageDirty = true
     }
@@ -319,7 +352,7 @@ async function renderUnicodeDocToPdf(
       ctx.font = font
       ctx.fillStyle = '#1e293b'
       slice.forEach((l, i) => {
-        if (l) ctx.fillText(l, margin + 12 * scale, y + pad + i * lh)
+        if (l) drawTrackedText(l, margin + 12 * scale, y + pad + i * lh, fontSize)
       })
       y += boxH + 10 * scale
       pageDirty = true
@@ -401,7 +434,7 @@ async function renderUnicodeDocToPdf(
               ctx.stroke()
             }
             wrappedCells[ci].forEach((line, li) => {
-              ctx.fillText(line, cx + cellPad, y + cellPad + li * lh)
+              drawTrackedText(line, cx + cellPad, y + cellPad + li * lh, fontSize)
             })
           }
           y += rowH
@@ -439,7 +472,7 @@ async function renderUnicodeDocToPdf(
       ctx.font = font
       ctx.fillStyle = level <= 2 ? '#1e293b' : '#334155'
       for (const l of lines) {
-        ctx.fillText(l, margin, y)
+        drawTrackedText(l, margin, y, fontSize)
         y += lh
         pageDirty = true
       }
@@ -467,7 +500,7 @@ async function renderUnicodeDocToPdf(
       ctx.font = font
       ctx.fillStyle = '#475569'
       for (const l of lines) {
-        ctx.fillText(l, margin + 14 * scale, y)
+        drawTrackedText(l, margin + 14 * scale, y, fontSize)
         y += lh
         pageDirty = true
       }
@@ -492,7 +525,7 @@ async function renderUnicodeDocToPdf(
       ctx.font = font
       ctx.fillStyle = '#18181b'
       for (const l of lines) {
-        ctx.fillText(l, margin + 20 * scale, y)
+        drawTrackedText(l, margin + 20 * scale, y, fontSize)
         y += lh
         pageDirty = true
       }
@@ -510,7 +543,7 @@ async function renderUnicodeDocToPdf(
     ctx.fillStyle = '#18181b'
     for (const l of lines) {
       await ensureSpace(lh)
-      ctx.fillText(l, margin, y)
+      drawTrackedText(l, margin, y, fontSize)
       y += lh
       pageDirty = true
     }
@@ -525,7 +558,7 @@ async function renderUnicodeDocToPdf(
   if (doc.getPageCount() === 0) doc.addPage([size.width, size.height])
   if (opts.title) doc.setTitle(opts.title)
   doc.setProducer('PaperFlow AI')
-  return savePdf(doc)
+  return { bytes: await savePdf(doc), textPages }
 }
 
 /** Convert plain text to a cleanly wrapped multi-page PDF. */
@@ -534,12 +567,13 @@ export async function textToPdf(
   opts: { title?: string; fontSize?: number; pageSize?: 'a4' | 'letter'; margin?: number } = {},
 ): Promise<Uint8Array> {
   if (typeof document !== 'undefined' && hasNonWinAnsi(text + (opts.title ?? ''))) {
-    return renderUnicodeDocToPdf(text, {
+    const { bytes } = await renderUnicodeDocToPdf(text, {
       isMarkdown: false,
       title: opts.title,
       pageSize: opts.pageSize,
       margin: opts.margin,
     })
+    return bytes
   }
   const { PDFDocument } = await loadPdfLib()
   const doc = await PDFDocument.create()
@@ -653,12 +687,13 @@ export async function markdownToPdf(
   // or Markdown tables are present so every glyph renders accurately with zero "????" boxes.
   const hasTables = /^\|.+\|$/m.test(markdown)
   if (typeof document !== 'undefined' && (hasNonWinAnsi(markdown + (opts.title ?? '')) || hasTables)) {
-    return renderUnicodeDocToPdf(markdown, {
+    const { bytes } = await renderUnicodeDocToPdf(markdown, {
       isMarkdown: true,
       title: opts.title,
       pageSize: opts.pageSize,
       margin: opts.margin,
     })
+    return bytes
   }
   const { PDFDocument } = await loadPdfLib()
   const doc = await PDFDocument.create()
@@ -953,6 +988,7 @@ export async function ensurePdfFile(file: File): Promise<{ file: File; converted
 
   const outName = `${baseName(file.name)}.pdf`
   let bytes: Uint8Array
+  let textPages: UnicodeTextSpan[][] | undefined
 
   if (file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(lower)) {
     bytes = await imagesToPdf([file], {
@@ -965,7 +1001,14 @@ export async function ensurePdfFile(file: File): Promise<{ file: File; converted
     })
   } else if (lower.endsWith('.md') || lower.endsWith('.markdown') || file.type === 'text/markdown') {
     const md = await file.text()
-    bytes = await markdownToPdf(md, { title: baseName(file.name) })
+    const hasTables = /^\|.+\|$/m.test(md)
+    if (typeof document !== 'undefined' && (hasNonWinAnsi(md + file.name) || hasTables)) {
+      const res = await renderUnicodeDocToPdf(md, { isMarkdown: true, title: baseName(file.name) })
+      bytes = res.bytes
+      textPages = res.textPages
+    } else {
+      bytes = await markdownToPdf(md, { title: baseName(file.name) })
+    }
   } else if (lower.endsWith('.html') || lower.endsWith('.htm') || file.type === 'text/html') {
     const html = await file.text()
     bytes = await htmlToPdf(html, baseName(file.name))
@@ -976,13 +1019,18 @@ export async function ensurePdfFile(file: File): Promise<{ file: File; converted
     bytes = await docxToPdf(file)
   } else if (lower.endsWith('.txt') || file.type.startsWith('text/')) {
     const txt = await file.text()
-    bytes = await textToPdf(txt, { title: baseName(file.name) })
+    if (typeof document !== 'undefined' && hasNonWinAnsi(txt + file.name)) {
+      const res = await renderUnicodeDocToPdf(txt, { isMarkdown: false, title: baseName(file.name) })
+      bytes = res.bytes
+      textPages = res.textPages
+    } else {
+      bytes = await textToPdf(txt, { title: baseName(file.name) })
+    }
   } else {
     throw new Error(`Unsupported file format: "${file.name}". Supported: PDF, PNG, JPG, WebP, MD, TXT, HTML, DOCX.`)
   }
 
-  return {
-    file: new File([bytes as BlobPart], outName, { type: 'application/pdf', lastModified: Date.now() }),
-    converted: true,
-  }
+  const outFile = new File([bytes as BlobPart], outName, { type: 'application/pdf', lastModified: Date.now() })
+  if (textPages) convertedTextLayers.set(outFile, textPages)
+  return { file: outFile, converted: true }
 }
