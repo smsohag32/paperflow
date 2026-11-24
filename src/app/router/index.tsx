@@ -19,6 +19,8 @@ const ProtectRoute = React.lazy(() => import('@/routes/ProtectRoute'))
 const ExtractRoute = React.lazy(() => import('@/routes/ExtractRoute'))
 const MarkdownRoute = React.lazy(() => import('@/routes/MarkdownRoute'))
 const CompareRoute = React.lazy(() => import('@/routes/CompareRoute'))
+const TemplatesRoute = React.lazy(() => import('@/routes/TemplatesRoute'))
+const MediaRoute = React.lazy(() => import('@/routes/MediaRoute'))
 const SettingsRoute = React.lazy(() => import('@/routes/SettingsRoute'))
 const PrivacyRoute = React.lazy(() => import('@/routes/PrivacyRoute'))
 
@@ -64,6 +66,8 @@ export const router = createBrowserRouter([
       { path: 'extract', element: wrap(ExtractRoute) },
       { path: 'markdown', element: wrap(MarkdownRoute) },
       { path: 'compare', element: wrap(CompareRoute) },
+      { path: 'templates', element: wrap(TemplatesRoute) },
+      { path: 'media', element: wrap(MediaRoute) },
       { path: 'settings', element: wrap(SettingsRoute) },
       { path: 'privacy', element: wrap(PrivacyRoute) },
       { path: '*', element: <Navigate to="/" replace /> },

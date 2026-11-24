@@ -57,6 +57,9 @@ import {
   ArrowUpDown,
   Stamp,
   X,
+  FileText,
+  Clock,
+  ArrowLeft,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -83,12 +86,22 @@ import { useWorkspace } from '@/stores/workspace'
 import { exportWorkspacePdf } from '@/lib/pdf/export-workspace'
 import { ACCEPTED_UNIVERSAL_FILES, ensurePdfFile } from '@/lib/pdf/convert'
 import { downloadBlob, pdfBlob } from '@/lib/utils/download'
-import { putAsset, addHistory } from '@/lib/storage/repo'
+import {
+  putAsset,
+  addHistory,
+  listSavedProjects,
+  deleteSavedProject,
+  listLibraryFiles,
+  getLibraryFile,
+  deleteLibraryFile,
+} from '@/lib/storage/repo'
 import { listSignaturePresets } from '@/lib/image/signature'
 import { PasswordRequiredError } from '@/lib/pdf/pdfjs'
 import { getDocument } from '@/lib/pdf/render'
 import { useProfile } from '@/lib/performance/profile'
-import type { StoredSignature } from '@/lib/storage/db'
+import { formatBytes } from '@/lib/utils/format'
+import type { StoredProject, StoredSignature } from '@/lib/storage/db'
+import type { LibraryFile } from '@/types/common'
 import type { EditorTool, FontFamily, WorkspacePage } from '@/types/workspace'
 import { cn } from '@/lib/utils/cn'
 
@@ -220,6 +233,8 @@ export default function WorkspaceRoute() {
   const openFile = useWorkspace((s) => s.openFile)
   const appendFile = useWorkspace((s) => s.appendFile)
   const saveProject = useWorkspace((s) => s.saveProject)
+  const loadSavedProject = useWorkspace((s) => s.loadSavedProject)
+  const closeDoc = useWorkspace((s) => s.closeDoc)
   const setActivePage = useWorkspace((s) => s.setActivePage)
   const toggleSelectPage = useWorkspace((s) => s.toggleSelectPage)
   const selectAllPages = useWorkspace((s) => s.selectAllPages)
@@ -253,6 +268,17 @@ export default function WorkspaceRoute() {
   const [rightPanelOpen, setRightPanelOpen] = React.useState(false)
   const [panelTab, setPanelTab] = React.useState<'element' | 'page' | 'doc'>('page')
   const [signatures, setSignatures] = React.useState<StoredSignature[]>([])
+  const [savedProjects, setSavedProjects] = React.useState<StoredProject[]>([])
+  const [recentFiles, setRecentFiles] = React.useState<LibraryFile[]>([])
+
+  const refreshSavedList = React.useCallback(() => {
+    listSavedProjects(16).then(setSavedProjects).catch(() => {})
+    listLibraryFiles(12).then(setRecentFiles).catch(() => {})
+  }, [])
+
+  React.useEffect(() => {
+    if (!doc) refreshSavedList()
+  }, [doc, refreshSavedList])
 
   React.useEffect(() => {
     if (selectedAnnotationId) setPanelTab('element')
@@ -688,6 +714,21 @@ export default function WorkspaceRoute() {
   }
 
   if (!doc) {
+    const formatAgo = (ts: number) => {
+      const sec = Math.max(0, Math.floor((Date.now() - ts) / 1000))
+      if (sec < 45) return 'Just now'
+      const min = Math.floor(sec / 60)
+      if (min < 60) return `${min}m ago`
+      const hr = Math.floor(min / 60)
+      if (hr < 24) return `${hr}h ago`
+      const day = Math.floor(hr / 24)
+      if (day < 7) return `${day}d ago`
+      return new Date(ts).toLocaleDateString()
+    }
+
+    const savedNames = new Set(savedProjects.map((p) => p.name.toLowerCase()))
+    const uniqueRecentFiles = recentFiles.filter((f) => !savedNames.has(f.name.toLowerCase()))
+
     return (
       <div className="flex w-full flex-col gap-6 px-4 py-8 md:px-6 lg:px-8">
         <div className="space-y-1 text-center">
@@ -703,6 +744,148 @@ export default function WorkspaceRoute() {
           title="Drop one or multiple PDFs, Markdown (.md), Word (.docx), or images"
           description="Select 1 file to open it directly, or multiple files to auto-convert & merge them into one Workspace"
         />
+
+        {(savedProjects.length > 0 || uniqueRecentFiles.length > 0) && (
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {savedProjects.map((proj) => (
+              <div
+                key={proj.id}
+                role="button"
+                tabIndex={0}
+                onClick={async () => {
+                  try {
+                    await loadSavedProject(proj.id)
+                    toast.success(`Opened "${proj.name}"`)
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : 'Could not open saved project')
+                  }
+                }}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    try {
+                      await loadSavedProject(proj.id)
+                      toast.success(`Opened "${proj.name}"`)
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : 'Could not open saved project')
+                    }
+                  }
+                }}
+                className="group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-border/80 bg-card p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary">
+                      <FileText className="size-4.5" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="truncate text-sm font-semibold text-foreground group-hover:text-primary">
+                        {proj.name}
+                      </h3>
+                      <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+                        {proj.pageCount} {proj.pageCount === 1 ? 'page' : 'pages'}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="success" className="shrink-0 text-[10px]">
+                    Saved
+                  </Badge>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between border-t pt-2.5 text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Clock className="size-3" />
+                    {formatAgo(proj.updatedAt)}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    title="Delete saved project"
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      await deleteSavedProject(proj.id)
+                      refreshSavedList()
+                      toast.info(`Deleted "${proj.name}"`)
+                    }}
+                  >
+                    <Trash2 className="size-3.5 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+
+            {uniqueRecentFiles.map((f) => (
+              <div
+                key={f.id}
+                role="button"
+                tabIndex={0}
+                onClick={async () => {
+                  try {
+                    const loaded = await getLibraryFile(f.id)
+                    if (!loaded) {
+                      toast.error('File is no longer in local storage')
+                      refreshSavedList()
+                      return
+                    }
+                    await openFile(loaded.file, { existingSourceId: f.id })
+                    toast.success(`Opened ${f.name}`)
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : 'Could not open file')
+                  }
+                }}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    const loaded = await getLibraryFile(f.id)
+                    if (loaded) await openFile(loaded.file, { existingSourceId: f.id })
+                  }
+                }}
+                className="group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-border/80 bg-card p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground transition-colors group-hover:bg-primary/12 group-hover:text-primary">
+                      <FileText className="size-4.5" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="truncate text-sm font-semibold text-foreground group-hover:text-primary">
+                        {f.name}
+                      </h3>
+                      <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+                        {formatBytes(f.size)}
+                        {f.pageCount ? ` · ${f.pageCount} ${f.pageCount === 1 ? 'page' : 'pages'}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="outline" className="shrink-0 text-[10px]">
+                    Recent
+                  </Badge>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between border-t pt-2.5 text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Clock className="size-3" />
+                    {formatAgo(f.lastOpenedAt)}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    title="Remove from recent"
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      await deleteLibraryFile(f.id)
+                      refreshSavedList()
+                      toast.info(`Removed "${f.name}"`)
+                    }}
+                  >
+                    <Trash2 className="size-3.5 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <PasswordDialog
           open={!!pwPrompt}
           fileName={pwPrompt?.file.name ?? ''}
@@ -1307,6 +1490,11 @@ export default function WorkspaceRoute() {
 
       {/* Top Toolbar */}
       <div className="flex flex-wrap items-center gap-1 border-b bg-card px-2 py-1.5">
+        <Tip label="Back to recent projects">
+          <Button variant="ghost" size="icon-sm" onClick={closeDoc}>
+            <ArrowLeft className="size-4" />
+          </Button>
+        </Tip>
         <Tip label="Open PDF" shortcut="⌘O">
           <Button variant="ghost" size="icon-sm" onClick={() => openInputRef.current?.click()}>
             <FolderOpen className="size-4" />

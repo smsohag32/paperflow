@@ -16,9 +16,18 @@ import {
   Type,
   Maximize2,
   AlignLeft,
+  Plus,
+  ArrowLeft,
+  Save,
+  CheckCircle2,
+  Search,
+  FilePlus2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/misc'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +49,17 @@ import { cn } from '@/lib/utils/cn'
 type ViewMode = 'preview' | 'split' | 'source'
 type ReadingWidth = 'narrow' | 'comfortable' | 'wide'
 
+interface SavedMarkdownDoc {
+  id: string
+  fileName: string
+  content: string
+  saved: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+const MD_STORAGE_KEY = 'paperflow:markdown:docs:v1'
+
 const WIDTH_CLASS: Record<ReadingWidth, string> = {
   narrow: 'max-w-2xl',
   comfortable: 'max-w-[860px]',
@@ -54,7 +74,69 @@ const DEFAULT_OUTLINE_WIDTH = 240
 const MIN_OUTLINE_WIDTH = 170
 const MAX_OUTLINE_WIDTH = 420
 
+function listSavedMdDocs(): SavedMarkdownDoc[] {
+  try {
+    const raw = localStorage.getItem(MD_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return (parsed as SavedMarkdownDoc[]).sort((a, b) => b.updatedAt - a.updatedAt)
+  } catch {
+    return []
+  }
+}
+
+function upsertSavedMdDoc(doc: SavedMarkdownDoc): SavedMarkdownDoc[] {
+  const existing = listSavedMdDocs()
+  const idx = existing.findIndex((d) => d.id === doc.id)
+  const next = idx >= 0 ? existing.map((d) => (d.id === doc.id ? doc : d)) : [doc, ...existing]
+  const sorted = next.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 40)
+  try {
+    localStorage.setItem(MD_STORAGE_KEY, JSON.stringify(sorted))
+  } catch {
+    // Ignore storage quota errors
+  }
+  return sorted
+}
+
+function deleteSavedMdDoc(id: string): SavedMarkdownDoc[] {
+  const next = listSavedMdDocs().filter((d) => d.id !== id)
+  try {
+    localStorage.setItem(MD_STORAGE_KEY, JSON.stringify(next))
+  } catch {
+    // Ignore storage errors
+  }
+  return next
+}
+
+function formatRelativeTime(ts: number): string {
+  const diffSec = Math.max(0, Math.floor((Date.now() - ts) / 1000))
+  if (diffSec < 45) return 'Just now'
+  const diffMin = Math.floor(diffSec / 60)
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return `${diffHr}h ago`
+  const diffDay = Math.floor(diffHr / 24)
+  if (diffDay < 7) return `${diffDay}d ago`
+  return new Date(ts).toLocaleDateString()
+}
+
+function countWords(text: string): number {
+  const trimmed = text.trim()
+  if (!trimmed) return 0
+  return trimmed.split(/\s+/).length
+}
+
 export default function MarkdownRoute() {
+  // Saved / Recent docs list for the fresh Hub landing screen
+  const [savedDocs, setSavedDocs] = React.useState<SavedMarkdownDoc[]>(() => listSavedMdDocs())
+  const [hubSearch, setHubSearch] = React.useState('')
+  const [hubFilter, setHubFilter] = React.useState<'all' | 'saved' | 'draft'>('all')
+
+  // Active editor session (null = Fresh Hub view, string = Editor view)
+  const [activeId, setActiveId] = React.useState<string | null>(null)
+  const [isSaved, setIsSaved] = React.useState<boolean>(false)
+  const [createdAt, setCreatedAt] = React.useState<number>(() => Date.now())
   const [content, setContent] = React.useState<string>('')
   const [fileName, setFileName] = React.useState<string>('untitled.md')
   const [viewMode, setViewMode] = React.useState<ViewMode>('split')
@@ -83,6 +165,99 @@ export default function MarkdownRoute() {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
     }
   }, [])
+
+  // Auto-save active document into recent list
+  React.useEffect(() => {
+    if (!activeId) return
+    const timer = setTimeout(() => {
+      const updated: SavedMarkdownDoc = {
+        id: activeId,
+        fileName: fileName.trim() || 'untitled.md',
+        content,
+        saved: isSaved,
+        createdAt,
+        updatedAt: Date.now(),
+      }
+      setSavedDocs(upsertSavedMdDoc(updated))
+    }, 450)
+    return () => clearTimeout(timer)
+  }, [activeId, fileName, content, isSaved, createdAt])
+
+  const openNewDoc = (initialName = 'untitled.md', initialContent = '', mode: ViewMode = 'split', markSaved = false) => {
+    const now = Date.now()
+    const newDoc: SavedMarkdownDoc = {
+      id: `md-${now}-${Math.random().toString(36).slice(2, 7)}`,
+      fileName: initialName,
+      content: initialContent,
+      saved: markSaved,
+      createdAt: now,
+      updatedAt: now,
+    }
+    setSavedDocs(upsertSavedMdDoc(newDoc))
+    setActiveId(newDoc.id)
+    setFileName(newDoc.fileName)
+    setContent(newDoc.content)
+    setIsSaved(newDoc.saved)
+    setCreatedAt(newDoc.createdAt)
+    setViewMode(mode)
+  }
+
+  const openSavedDoc = (item: SavedMarkdownDoc) => {
+    setActiveId(item.id)
+    setFileName(item.fileName)
+    setContent(item.content)
+    setIsSaved(item.saved)
+    setCreatedAt(item.createdAt)
+    setViewMode(item.content.trim() ? 'split' : 'split')
+  }
+
+  const handleBackToHub = () => {
+    if (activeId) {
+      const updated: SavedMarkdownDoc = {
+        id: activeId,
+        fileName: fileName.trim() || 'untitled.md',
+        content,
+        saved: isSaved,
+        createdAt,
+        updatedAt: Date.now(),
+      }
+      setSavedDocs(upsertSavedMdDoc(updated))
+    }
+    setActiveId(null)
+  }
+
+  const handleManualSave = () => {
+    if (!activeId) return
+    const updated: SavedMarkdownDoc = {
+      id: activeId,
+      fileName: fileName.trim() || 'untitled.md',
+      content,
+      saved: true,
+      createdAt,
+      updatedAt: Date.now(),
+    }
+    setIsSaved(true)
+    setSavedDocs(upsertSavedMdDoc(updated))
+    toast.success(`Saved ${updated.fileName}`)
+  }
+
+  const handleDuplicateDoc = (item: SavedMarkdownDoc) => {
+    const now = Date.now()
+    const copy: SavedMarkdownDoc = {
+      ...item,
+      id: `md-${now}-${Math.random().toString(36).slice(2, 7)}`,
+      fileName: `${baseName(item.fileName)}-copy.md`,
+      createdAt: now,
+      updatedAt: now,
+    }
+    setSavedDocs(upsertSavedMdDoc(copy))
+    toast.success(`Duplicated ${item.fileName}`)
+  }
+
+  const handleDeleteDoc = (item: SavedMarkdownDoc) => {
+    setSavedDocs(deleteSavedMdDoc(item.id))
+    toast.info(`Deleted ${item.fileName}`)
+  }
 
   // Smooth VS Code-style sash resizing for Split & Outline
   const startResize = (handle: 'split' | 'outline', e: React.PointerEvent<HTMLDivElement>) => {
@@ -152,8 +327,7 @@ export default function MarkdownRoute() {
     }
     try {
       const text = await f.text()
-      setContent(text)
-      setFileName(f.name)
+      openNewDoc(f.name, text, 'split', true)
       toast.success(`Opened ${f.name}`)
     } catch {
       toast.error('Could not read file')
@@ -186,9 +360,9 @@ export default function MarkdownRoute() {
     window.setTimeout(() => win.print(), 250)
   }
 
-  const handleExportMd = () => {
-    const outName = fileName.endsWith('.md') ? fileName : `${baseName(fileName)}.md`
-    downloadBlob(new Blob([content], { type: 'text/markdown;charset=utf-8' }), outName)
+  const handleExportMd = (name = fileName, body = content) => {
+    const outName = name.endsWith('.md') ? name : `${baseName(name)}.md`
+    downloadBlob(new Blob([body], { type: 'text/markdown;charset=utf-8' }), outName)
     toast.success(`Downloaded ${outName}`)
   }
 
@@ -205,8 +379,299 @@ export default function MarkdownRoute() {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  const filteredSavedDocs = React.useMemo(() => {
+    const q = hubSearch.trim().toLowerCase()
+    return savedDocs.filter((d) => {
+      if (hubFilter === 'saved' && !d.saved) return false
+      if (hubFilter === 'draft' && d.saved) return false
+      if (!q) return true
+      return d.fileName.toLowerCase().includes(q) || d.content.toLowerCase().includes(q)
+    })
+  }, [savedDocs, hubSearch, hubFilter])
+
   const outlineVisible = showToc && viewMode !== 'source'
 
+  /* ═══════════════════════ VIEW 1: FRESH MARKDOWN HUB ═══════════════════════ */
+  if (!activeId) {
+    return (
+      <div
+        className="relative w-full space-y-8 px-4 py-6 md:px-6 lg:px-8"
+        onDragOver={(e) => {
+          e.preventDefault()
+          if (!pageDragging) setPageDragging(true)
+        }}
+        onDragLeave={(e) => {
+          if (e.currentTarget === e.target) setPageDragging(false)
+        }}
+        onDrop={(e) => {
+          e.preventDefault()
+          setPageDragging(false)
+          const files = Array.from(e.dataTransfer.files)
+          if (files.length) loadFiles(files)
+        }}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".md,.markdown,.mdx,.txt,text/markdown,text/plain"
+          className="sr-only"
+          onChange={(e) => {
+            const list = e.target.files ? Array.from(e.target.files) : []
+            if (list.length) loadFiles(list)
+            e.target.value = ''
+          }}
+        />
+
+        {pageDragging && (
+          <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-xs">
+            <div className="flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-primary bg-card px-10 py-8 shadow-lg">
+              <FileCode2 className="size-10 text-primary" />
+              <p className="text-base font-semibold">Drop your .md file to open in Preview</p>
+              <p className="text-xs text-muted-foreground">Rendered locally — files never leave your device</p>
+            </div>
+          </div>
+        )}
+
+        {/* Fresh Header */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-semibold tracking-tight">Markdown Studio</h1>
+              <Badge variant="primary">VS Code-Style Preview</Badge>
+            </div>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Open a <code>.md</code> file, start writing fresh, or continue from your recently saved Markdown documents.
+            </p>
+          </div>
+          <Button size="sm" onClick={() => openNewDoc('untitled.md', '', 'split', false)}>
+            <Plus className="size-4" /> New Markdown
+          </Button>
+        </div>
+
+        {/* Top Action Boxes */}
+        <section className="space-y-2.5">
+          <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">Quick Start</h2>
+          <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
+            {/* Primary Open .md Action Box */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="group relative flex items-center gap-4 rounded-2xl border-2 border-dashed border-primary/40 bg-primary/5 p-5 text-left transition-all hover:border-primary hover:bg-primary/10 hover:shadow-sm active:scale-[0.99]"
+            >
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-xs transition-transform group-hover:scale-105">
+                <Upload className="size-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-semibold text-foreground group-hover:text-primary">
+                  Open .md File
+                </div>
+                <div className="mt-0.5 text-xs text-muted-foreground">
+                  Browse or drop <code>.md</code>, <code>.markdown</code>, or <code>.txt</code>
+                </div>
+              </div>
+            </button>
+
+            {/* New Blank Document Box */}
+            <button
+              type="button"
+              onClick={() => openNewDoc('untitled.md', '', 'split', false)}
+              className="group flex items-center gap-4 rounded-2xl border bg-card p-5 text-left transition-all hover:border-primary/50 hover:bg-secondary/35 hover:shadow-sm active:scale-[0.99]"
+            >
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-secondary text-foreground transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                <FilePlus2 className="size-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-semibold text-foreground group-hover:text-primary">
+                  New Blank Document
+                </div>
+                <div className="mt-0.5 text-xs text-muted-foreground">
+                  Start fresh with split editor &amp; live preview
+                </div>
+              </div>
+            </button>
+
+            {/* Sample Markdown Guide Box */}
+            <button
+              type="button"
+              onClick={() => {
+                openNewDoc('welcome-guide.md', SAMPLE_MARKDOWN, 'split', false)
+                toast.success('Loaded sample Markdown')
+              }}
+              className="group flex items-center gap-4 rounded-2xl border bg-card p-5 text-left transition-all hover:border-primary/50 hover:bg-secondary/35 hover:shadow-sm active:scale-[0.99]"
+            >
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-secondary text-foreground transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                <Sparkles className="size-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-semibold text-foreground group-hover:text-primary">
+                  Try Sample Guide
+                </div>
+                <div className="mt-0.5 text-xs text-muted-foreground">
+                  Explore tables, checklists, code blocks &amp; outline
+                </div>
+              </div>
+            </button>
+          </div>
+        </section>
+
+        {/* Recent & Saved Files List */}
+        <section className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Clock className="size-4 text-primary" />
+              <h2 className="text-base font-semibold tracking-tight">Recent &amp; Saved Files</h2>
+              <Badge variant="outline">{savedDocs.length}</Badge>
+            </div>
+
+            {savedDocs.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1 rounded-lg border bg-card p-0.5">
+                  {(
+                    [
+                      { id: 'all', label: 'All' },
+                      { id: 'saved', label: 'Saved' },
+                      { id: 'draft', label: 'Drafts' },
+                    ] as const
+                  ).map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setHubFilter(f.id)}
+                      className={cn(
+                        'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                        hubFilter === f.id
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
+                      )}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={hubSearch}
+                    onChange={(e) => setHubSearch(e.target.value)}
+                    placeholder="Search files…"
+                    className="h-8 w-44 pl-8 text-xs"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {savedDocs.length === 0 ? (
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+                <div className="flex size-11 items-center justify-center rounded-full bg-secondary text-muted-foreground">
+                  <FileCode2 className="size-5" />
+                </div>
+                <p className="text-sm font-medium">No recent Markdown files yet</p>
+                <p className="max-w-md text-xs text-muted-foreground">
+                  Open any <code>.md</code> file or create a new document above. Everything you edit or save will appear
+                  here automatically for instant access.
+                </p>
+              </CardContent>
+            </Card>
+          ) : filteredSavedDocs.length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center text-xs text-muted-foreground">
+                No files match your search or filter.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {filteredSavedDocs.map((item) => {
+                const snippet = markdownToPlainText(item.content).replace(/\s+/g, ' ').trim()
+                const words = countWords(item.content)
+                const mins = Math.max(1, Math.round(words / 200))
+
+                return (
+                  <div
+                    key={item.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openSavedDoc(item)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        openSavedDoc(item)
+                      }
+                    }}
+                    className="group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-border/80 bg-card p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <div className="space-y-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#007acc]/12 text-[#007acc] dark:bg-[#3794ff]/15 dark:text-[#3794ff]">
+                            <FileCode2 className="size-4" />
+                          </div>
+                          <h3 className="truncate font-mono text-xs font-semibold text-foreground group-hover:text-primary">
+                            {item.fileName}
+                          </h3>
+                        </div>
+                        <Badge variant={item.saved ? 'success' : 'outline'} className="shrink-0 text-[10px]">
+                          {item.saved ? 'Saved' : 'Draft'}
+                        </Badge>
+                      </div>
+
+                      <p className="line-clamp-2 min-h-[2.25rem] text-xs leading-relaxed text-muted-foreground">
+                        {snippet || 'Empty Markdown document — click to start writing…'}
+                      </p>
+                    </div>
+
+                    <div className="mt-3.5 flex items-center justify-between border-t pt-2.5 text-[11px] text-muted-foreground">
+                      <span className="truncate tabular-nums">
+                        {words} words · {mins}m · {formatRelativeTime(item.updatedAt)}
+                      </span>
+                      <div className="flex items-center gap-0.5">
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          title="Download .md"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleExportMd(item.fileName, item.content)
+                          }}
+                        >
+                          <Download className="size-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          title="Duplicate"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDuplicateDoc(item)
+                          }}
+                        >
+                          <Copy className="size-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          title="Delete"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDeleteDoc(item)
+                          }}
+                        >
+                          <Trash2 className="size-3.5 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </section>
+      </div>
+    )
+  }
+
+  /* ═══════════════════════ VIEW 2: VS CODE-STYLE EDITOR ═══════════════════════ */
   return (
     <div
       className="relative flex h-full w-full flex-col overflow-hidden bg-background text-foreground"
@@ -248,13 +713,20 @@ export default function MarkdownRoute() {
 
       {/* VS Code-style Editor Tab Bar */}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-secondary/45 px-2 pt-1.5">
-        {/* Active File Tabs */}
-        <div className="flex min-w-0 items-end gap-1">
+        {/* Back + Active File Tab */}
+        <div className="flex min-w-0 items-end gap-1.5">
+          <Button
+            size="xs"
+            variant="outline"
+            className="mb-1 text-xs"
+            onClick={handleBackToHub}
+            title="Back to Recent Files"
+          >
+            <ArrowLeft className="size-3.5" /> Back
+          </Button>
+
           <div className="flex items-center gap-2 rounded-t-md border border-b-0 border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground">
             <FileCode2 className="size-3.5 shrink-0 text-[#007acc] dark:text-[#3794ff]" />
-            <span className="text-muted-foreground">
-              {viewMode === 'preview' ? 'Preview' : viewMode === 'split' ? 'Split' : 'Source'}
-            </span>
             <input
               type="text"
               value={fileName}
@@ -262,8 +734,25 @@ export default function MarkdownRoute() {
               aria-label="Markdown filename"
               className="w-32 bg-transparent font-medium text-foreground outline-none focus:underline sm:w-44"
             />
+            <Badge variant={isSaved ? 'success' : 'outline'} className="text-[10px]">
+              {isSaved ? (
+                <>
+                  <CheckCircle2 className="mr-0.5 size-2.5" /> Saved
+                </>
+              ) : (
+                'Draft'
+              )}
+            </Badge>
           </div>
 
+          <Button
+            size="xs"
+            variant="ghost"
+            className="mb-1 text-xs text-muted-foreground hover:text-foreground"
+            onClick={handleManualSave}
+          >
+            <Save className="size-3.5" /> Save
+          </Button>
           <Button
             size="xs"
             variant="ghost"
@@ -271,18 +760,6 @@ export default function MarkdownRoute() {
             onClick={() => fileInputRef.current?.click()}
           >
             <Upload className="size-3.5" /> Open .md
-          </Button>
-          <Button
-            size="xs"
-            variant="ghost"
-            className="mb-1 hidden text-xs text-muted-foreground hover:text-foreground sm:inline-flex"
-            onClick={() => {
-              setContent(SAMPLE_MARKDOWN)
-              setFileName('welcome-guide.md')
-              toast.success('Loaded sample Markdown')
-            }}
-          >
-            <Sparkles className="size-3.5" /> Sample
           </Button>
         </div>
 
@@ -406,7 +883,7 @@ export default function MarkdownRoute() {
               <DropdownMenuItem onClick={() => triggerCopy(markdownToHtml(content), 'html', 'HTML')}>
                 <Code2 className="size-4" /> Copy Rendered HTML
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExportMd}>
+              <DropdownMenuItem onClick={() => handleExportMd()}>
                 <FileCode2 className="size-4" /> Download Markdown (.md)
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleExportHtml}>
@@ -422,12 +899,9 @@ export default function MarkdownRoute() {
             <Button
               size="icon-xs"
               variant="ghost"
-              aria-label="Clear file"
-              title="Clear file"
-              onClick={() => {
-                setContent('')
-                setFileName('untitled.md')
-              }}
+              aria-label="Clear content"
+              title="Clear content"
+              onClick={() => setContent('')}
             >
               <Trash2 className="size-3.5 text-muted-foreground" />
             </Button>
@@ -508,7 +982,6 @@ export default function MarkdownRoute() {
                 draggingHandle === 'split' && 'bg-primary',
               )}
             >
-              {/* Wider invisible hit target for effortless grabbing */}
               <div className="absolute inset-y-0 -right-1.5 -left-1.5 z-10" />
             </div>
           )}

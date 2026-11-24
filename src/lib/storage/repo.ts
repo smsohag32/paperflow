@@ -1,4 +1,4 @@
-import { getDB, safeWrite, type PaperflowDB } from './db'
+import { getDB, safeWrite, type PaperflowDB, type StoredProject } from './db'
 import type { StoreNames } from 'idb'
 import type { LibraryFile, ProcessingHistoryEntry } from '@/types/common'
 import { uid } from '@/lib/utils/id'
@@ -69,6 +69,19 @@ export async function savePreview(id: string, blob: Blob) {
 export async function getPreview(id: string) {
   const db = await getDB()
   return db.get('previews', id)
+}
+
+/* ─────────────── Saved workspace projects ─────────────── */
+
+export async function listSavedProjects(limit = 24): Promise<StoredProject[]> {
+  const db = await getDB()
+  const all = await db.getAllFromIndex('projects', 'byUpdated')
+  return all.reverse().slice(0, limit)
+}
+
+export async function deleteSavedProject(id: string) {
+  const db = await getDB()
+  await db.delete('projects', id)
 }
 
 /* ─────────────── Assets (images placed in documents) ─────────────── */

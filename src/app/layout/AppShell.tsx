@@ -15,6 +15,8 @@ import {
   Table2,
   Sparkles,
   GitCompareArrows,
+  FileBadge2,
+  Images,
   Clock,
   Star,
   Layers,
@@ -66,6 +68,7 @@ const NAV_PRIMARY = [
 
 const NAV_FEATURES = [
   { to: '/workspace', label: 'PDF Workspace', icon: FileEdit },
+  { to: '/templates', label: 'Document Templates', icon: FileBadge2 },
   { to: '/markdown', label: 'Markdown Viewer', icon: FileCode2 },
   { to: '/merge', label: 'Merge PDF', icon: Combine },
   { to: '/split', label: 'Split PDF', icon: Scissors },
@@ -73,6 +76,7 @@ const NAV_FEATURES = [
   { to: '/compare', label: 'Compare PDF', icon: GitCompareArrows },
   { to: '/sign', label: 'Sign PDF', icon: PenTool },
   { to: '/convert', label: 'Convert Studio', icon: ArrowLeftRight },
+  { to: '/media', label: 'Extract Images', icon: Images },
   { to: '/ocr', label: 'OCR Studio', icon: ScanText },
   { to: '/enhance', label: 'Scan Enhance', icon: Wand2 },
   { to: '/ai', label: 'AI Workspace', icon: Sparkles },

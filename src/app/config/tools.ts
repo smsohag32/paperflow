@@ -13,6 +13,8 @@ import {
   FileCode2,
   Layers,
   GitCompareArrows,
+  FileBadge2,
+  Images,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -41,6 +43,17 @@ export const TOOLS: ToolDef[] = [
     icon: FileEdit,
     category: 'edit',
     keywords: ['edit', 'annotate', 'text', 'draw', 'highlight', 'crop', 'watermark', 'header', 'footer', 'numbers', 'reorder'],
+    quick: true,
+  },
+  {
+    id: 'templates',
+    name: 'Document Templates',
+    shortName: 'Templates → PDF',
+    description: 'Build Invoices (auto tax/total), Resumes/CVs, Certificates, and Letterheads with live PDF preview.',
+    route: '/templates',
+    icon: FileBadge2,
+    category: 'edit',
+    keywords: ['invoice', 'resume', 'cv', 'certificate', 'letterhead', 'bill', 'template', 'builder', 'creator'],
     quick: true,
   },
   {
@@ -107,6 +120,17 @@ export const TOOLS: ToolDef[] = [
     icon: ArrowLeftRight,
     category: 'convert',
     keywords: ['jpg', 'png', 'webp', 'images', 'text', 'html', 'docx', 'word', 'zip'],
+    quick: true,
+  },
+  {
+    id: 'media',
+    name: 'Extract Images & Media',
+    shortName: 'PDF Media',
+    description: 'Extract all embedded photos & charts in original quality, download as ZIP, or remove/replace images.',
+    route: '/media',
+    icon: Images,
+    category: 'convert',
+    keywords: ['images', 'photos', 'media', 'extract', 'zip', 'gallery', 'remove images', 'replace image', 'charts'],
     quick: true,
   },
   {
