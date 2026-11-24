@@ -173,7 +173,7 @@ describe('UI components', () => {
     expect(new TextDecoder().decode(edited.slice(0, 5))).toBe('%PDF-')
   })
 
-  it('renders fresh Markdown Hub with Open .md box and persists recent saved files', () => {
+  it('renders fresh Markdown Hub with Open .md box, multi-tab navigation, and fullscreen toggle', () => {
     localStorage.clear()
     render(
       <MemoryRouter>
@@ -181,17 +181,27 @@ describe('UI components', () => {
       </MemoryRouter>,
     )
     expect(screen.getByText('Markdown Studio')).toBeInTheDocument()
-    expect(screen.getByText('Open .md File')).toBeInTheDocument()
+    expect(screen.getByText('Open .md Files')).toBeInTheDocument()
     expect(screen.getByText('Recent & Saved Files')).toBeInTheDocument()
 
-    // Create a new document, rename & save, then go back to Hub
+    // Create a new document & rename (auto-saved cleanly without Saved badge)
     fireEvent.click(screen.getByRole('button', { name: /New Blank Document/i }))
     const nameInput = screen.getByLabelText('Markdown filename')
     fireEvent.change(nameInput, { target: { value: 'roadmap.md' } })
-    fireEvent.click(screen.getByRole('button', { name: /^Save$/i }))
-    fireEvent.click(screen.getByRole('button', { name: /Back/i }))
 
-    // Saved file card appears in Hub and reopens on click
+    // Add a second tab and toggle Fullscreen mode
+    fireEvent.click(screen.getByRole('button', { name: /New Markdown tab/i }))
+    expect(screen.getByText('2 open tabs')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Enter Fullscreen/i }))
+    expect(screen.getByRole('button', { name: /Exit Fullscreen/i })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Exit Fullscreen/i }))
+
+    // Collapse & expand Files panel from inside the Files section
+    fireEvent.click(screen.getByRole('button', { name: /Collapse Files panel/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Expand Files panel/i }))
+
+    // Return to Hub and verify file card reopens cleanly
+    fireEvent.click(screen.getByRole('button', { name: /Back/i }))
     expect(screen.getByText('roadmap.md')).toBeInTheDocument()
     fireEvent.click(screen.getByText('roadmap.md'))
     expect(screen.getByDisplayValue('roadmap.md')).toBeInTheDocument()

@@ -72,4 +72,42 @@ describe('markdown parser', () => {
     expect(plain).toContain('PaperFlow AI')
     expect(plain).not.toContain('```')
   })
+
+  it('parses block and inline LaTeX math formulas including \\begin{cases} and preserves currency', () => {
+    const md = [
+      '$$\\text{Achievement \\%} = \\min\\left(\\text{Cap \\%},\\; \\frac{\\text{Actual}}{\\text{Target}} \\times ১০০\\right)$$',
+      '',
+      'Score rule: $$\\begin{cases} 100 & \\text{যদি } x \\le 1 \\\\ 0 & \\text{যদি } x > 1 \\end{cases}$$',
+      '',
+      'Inline $a^2 + b^2 = c^2$ and price $100 stays plain text.',
+    ].join('\n')
+
+    const doc = parseMarkdown(md)
+    expect(doc.blocks[0].type).toBe('math')
+    if (doc.blocks[0].type === 'math') {
+      expect(doc.blocks[0].tex).toContain('\\frac{\\text{Actual}}{\\text{Target}}')
+    }
+
+    const p1 = doc.blocks[1]
+    expect(p1.type).toBe('paragraph')
+    if (p1.type === 'paragraph') {
+      const nodes = parseInline(p1.text)
+      const mathNode = nodes.find((n) => n.type === 'math')
+      expect(mathNode).toBeTruthy()
+      if (mathNode && mathNode.type === 'math') {
+        expect(mathNode.display).toBe(true)
+        // Double backslash row separator inside \begin{cases} must NOT be eaten!
+        expect(mathNode.tex).toContain('\\\\')
+      }
+    }
+
+    const p2 = doc.blocks[2]
+    expect(p2.type).toBe('paragraph')
+    if (p2.type === 'paragraph') {
+      const nodes = parseInline(p2.text)
+      const mathNodes = nodes.filter((n) => n.type === 'math')
+      expect(mathNodes).toHaveLength(1)
+      expect(mathNodes[0].type === 'math' && mathNodes[0].tex).toBe('a^2 + b^2 = c^2')
+    }
+  })
 })

@@ -1,4 +1,6 @@
 import * as React from 'react'
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
 import {
   Copy,
   Check,
@@ -136,6 +138,55 @@ function highlightCode(code: string, lang: string): React.ReactNode {
   return parts
 }
 
+function renderKatexHtml(tex: string, displayMode: boolean): string {
+  try {
+    return katex.renderToString(tex, {
+      displayMode,
+      throwOnError: false,
+      strict: 'ignore',
+      trust: true,
+    })
+  } catch {
+    return tex
+  }
+}
+
+function MathBlock({ tex }: { tex: string }) {
+  const [copied, setCopied] = React.useState(false)
+  const html = React.useMemo(() => renderKatexHtml(tex, true), [tex])
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(tex)
+      setCopied(true)
+      toast.success('Copied LaTeX formula')
+      window.setTimeout(() => setCopied(false), 1600)
+    } catch {
+      toast.error('Could not copy formula')
+    }
+  }
+
+  return (
+    <div className="group/math relative my-4 overflow-x-auto rounded-lg border border-border/60 bg-secondary/25 px-4 py-3 text-center scrollbar-thin">
+      <div className="katex-block inline-block min-w-full" dangerouslySetInnerHTML={{ __html: html }} />
+      <button
+        type="button"
+        onClick={handleCopy}
+        title="Copy LaTeX formula"
+        className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-md border border-border/70 bg-card/90 px-1.5 py-0.5 text-[10.5px] font-medium text-muted-foreground opacity-0 shadow-xs transition-opacity hover:text-foreground group-hover/math:opacity-100"
+      >
+        {copied ? <Check className="size-3 text-success" /> : <Copy className="size-3" />}
+        <span>{copied ? 'Copied' : 'LaTeX'}</span>
+      </button>
+    </div>
+  )
+}
+
+function MathInline({ tex }: { tex: string }) {
+  const html = React.useMemo(() => renderKatexHtml(tex, false), [tex])
+  return <span className="katex-inline align-baseline" dangerouslySetInnerHTML={{ __html: html }} />
+}
+
 function CodeBlock({ lang, code }: { lang: string; code: string }) {
   const [copied, setCopied] = React.useState(false)
 
@@ -198,6 +249,8 @@ function renderInlineNodes(nodes: MdInline[], keyPrefix = 'in'): React.ReactNode
             {node.value}
           </code>
         )
+      case 'math':
+        return node.display ? <MathBlock key={key} tex={node.tex} /> : <MathInline key={key} tex={node.tex} />
       case 'kbd':
         return (
           <kbd
@@ -322,12 +375,14 @@ export function MarkdownPreview({ blocks, fontSize = 'md', onToggleTask, classNa
         }
         case 'paragraph':
           return (
-            <p key={key} className="my-3.5 leading-[1.68] text-foreground/95">
+            <div key={key} className="my-3.5 leading-[1.68] text-foreground/95">
               {renderInlineNodes(parseInline(block.text), key)}
-            </p>
+            </div>
           )
         case 'code':
           return <CodeBlock key={key} lang={block.lang} code={block.code} />
+        case 'math':
+          return <MathBlock key={key} tex={block.tex} />
         case 'blockquote':
           return (
             <blockquote

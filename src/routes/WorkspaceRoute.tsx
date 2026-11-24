@@ -23,6 +23,7 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
+  Minimize2,
   FolderOpen,
   Plus,
   RotateCw,
@@ -265,6 +266,7 @@ export default function WorkspaceRoute() {
   const restoreOriginal = useWorkspace((s) => s.restoreOriginal)
 
   const [exporting, setExporting] = React.useState(false)
+  const [isFullscreen, setIsFullscreen] = React.useState(false)
   const [rightPanelOpen, setRightPanelOpen] = React.useState(false)
   const [panelTab, setPanelTab] = React.useState<'element' | 'page' | 'doc'>('page')
   const [signatures, setSignatures] = React.useState<StoredSignature[]>([])
@@ -494,8 +496,12 @@ export default function WorkspaceRoute() {
         e.preventDefault()
         setZoom(zoom - 0.15)
       } else if (e.key === 'Escape') {
-        setTool('select')
-        selectAnnotation(null)
+        if (isFullscreen) {
+          setIsFullscreen(false)
+        } else {
+          setTool('select')
+          selectAnnotation(null)
+        }
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && !typing) {
         if (selectedAnnotationId && activePage) {
           e.preventDefault()
@@ -533,6 +539,7 @@ export default function WorkspaceRoute() {
     setTool,
     selectAnnotation,
     deleteAnnotation,
+    isFullscreen,
   ])
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -1451,7 +1458,12 @@ export default function WorkspaceRoute() {
   )
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div
+      className={cn(
+        'flex flex-col overflow-hidden bg-background',
+        isFullscreen ? 'fixed inset-0 z-50 h-screen w-screen' : 'h-full',
+      )}
+    >
       <input
         ref={openInputRef}
         type="file"
@@ -1491,7 +1503,14 @@ export default function WorkspaceRoute() {
       {/* Top Toolbar */}
       <div className="flex flex-wrap items-center gap-1 border-b bg-card px-2 py-1.5">
         <Tip label="Back to recent projects">
-          <Button variant="ghost" size="icon-sm" onClick={closeDoc}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => {
+              setIsFullscreen(false)
+              closeDoc()
+            }}
+          >
             <ArrowLeft className="size-4" />
           </Button>
         </Tip>
@@ -1577,17 +1596,14 @@ export default function WorkspaceRoute() {
               <Search className="size-4" />
             </Button>
           </Tip>
-          <Tip label="Fullscreen">
+          <Tip label={isFullscreen ? 'Exit Fullscreen (Esc)' : 'Fullscreen View'}>
             <Button
-              variant="ghost"
+              variant={isFullscreen ? 'default' : 'ghost'}
               size="icon-sm"
-              className="hidden sm:inline-flex"
-              onClick={() => {
-                if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
-                else document.documentElement.requestFullscreen?.().catch(() => {})
-              }}
+              onClick={() => setIsFullscreen((v) => !v)}
+              aria-label={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
             >
-              <Maximize2 className="size-4" />
+              {isFullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
             </Button>
           </Tip>
           <Button

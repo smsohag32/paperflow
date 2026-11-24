@@ -15,13 +15,17 @@ import {
   Clock,
   Type,
   Maximize2,
+  Minimize2,
   AlignLeft,
   Plus,
   ArrowLeft,
-  Save,
-  CheckCircle2,
   Search,
   FilePlus2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  ChevronLeft,
+  ChevronRight,
+  X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -80,33 +84,33 @@ function listSavedMdDocs(): SavedMarkdownDoc[] {
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    return (parsed as SavedMarkdownDoc[]).sort((a, b) => b.updatedAt - a.updatedAt)
+    return parsed as SavedMarkdownDoc[]
   } catch {
     return []
   }
 }
 
-function upsertSavedMdDoc(doc: SavedMarkdownDoc): SavedMarkdownDoc[] {
-  const existing = listSavedMdDocs()
-  const idx = existing.findIndex((d) => d.id === doc.id)
-  const next = idx >= 0 ? existing.map((d) => (d.id === doc.id ? doc : d)) : [doc, ...existing]
-  const sorted = next.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 40)
+function saveAllMdDocs(docs: SavedMarkdownDoc[]): SavedMarkdownDoc[] {
+  const trimmed = docs.slice(0, 60)
   try {
-    localStorage.setItem(MD_STORAGE_KEY, JSON.stringify(sorted))
+    localStorage.setItem(MD_STORAGE_KEY, JSON.stringify(trimmed))
   } catch {
     // Ignore storage quota errors
   }
-  return sorted
+  return trimmed
+}
+
+function upsertSavedMdDoc(doc: SavedMarkdownDoc): SavedMarkdownDoc[] {
+  const existing = listSavedMdDocs()
+  const idx = existing.findIndex((d) => d.id === doc.id)
+  // Preserve exact position when updating an existing file so it never jumps to #1!
+  const next = idx >= 0 ? existing.map((d) => (d.id === doc.id ? doc : d)) : [doc, ...existing]
+  return saveAllMdDocs(next)
 }
 
 function deleteSavedMdDoc(id: string): SavedMarkdownDoc[] {
   const next = listSavedMdDocs().filter((d) => d.id !== id)
-  try {
-    localStorage.setItem(MD_STORAGE_KEY, JSON.stringify(next))
-  } catch {
-    // Ignore storage errors
-  }
-  return next
+  return saveAllMdDocs(next)
 }
 
 function formatRelativeTime(ts: number): string {
@@ -128,12 +132,13 @@ function countWords(text: string): number {
 }
 
 export default function MarkdownRoute() {
-  // Saved / Recent docs list for the fresh Hub landing screen
+  // Saved / Recent docs list
   const [savedDocs, setSavedDocs] = React.useState<SavedMarkdownDoc[]>(() => listSavedMdDocs())
   const [hubSearch, setHubSearch] = React.useState('')
   const [hubFilter, setHubFilter] = React.useState<'all' | 'saved' | 'draft'>('all')
 
-  // Active editor session (null = Fresh Hub view, string = Editor view)
+  // Multi-tab editor session (activeId === null => Hub view)
+  const [openTabIds, setOpenTabIds] = React.useState<string[]>([])
   const [activeId, setActiveId] = React.useState<string | null>(null)
   const [isSaved, setIsSaved] = React.useState<boolean>(false)
   const [createdAt, setCreatedAt] = React.useState<number>(() => Date.now())
@@ -143,6 +148,9 @@ export default function MarkdownRoute() {
   const [fontSize, setFontSize] = React.useState<ReaderFontSize>('lg')
   const [readingWidth, setReadingWidth] = React.useState<ReadingWidth>('comfortable')
   const [showToc, setShowToc] = React.useState<boolean>(false)
+  const [showFilesSidebar, setShowFilesSidebar] = React.useState<boolean>(true)
+  const [sidebarSearch, setSidebarSearch] = React.useState<string>('')
+  const [isFullscreen, setIsFullscreen] = React.useState<boolean>(false)
   const [copiedKey, setCopiedKey] = React.useState<string | null>(null)
   const [pageDragging, setPageDragging] = React.useState<boolean>(false)
 
@@ -155,6 +163,7 @@ export default function MarkdownRoute() {
   const splitContainerRef = React.useRef<HTMLDivElement>(null)
   const gutterRef = React.useRef<HTMLDivElement>(null)
   const rafRef = React.useRef<number | null>(null)
+  const dirtyRef = React.useRef<boolean>(false)
 
   const doc = React.useMemo(() => parseMarkdown(content), [content])
   const lineCount = React.useMemo(() => Math.max(1, content.split('\n').length), [content])
@@ -166,9 +175,26 @@ export default function MarkdownRoute() {
     }
   }, [])
 
-  // Auto-save active document into recent list
+  // Flush current active document ONLY if edited
+  const flushActiveDoc = React.useCallback((): SavedMarkdownDoc[] => {
+    if (!activeId || !dirtyRef.current) return savedDocs
+    const updated: SavedMarkdownDoc = {
+      id: activeId,
+      fileName: fileName.trim() || 'untitled.md',
+      content,
+      saved: isSaved,
+      createdAt,
+      updatedAt: Date.now(),
+    }
+    dirtyRef.current = false
+    const next = upsertSavedMdDoc(updated)
+    setSavedDocs(next)
+    return next
+  }, [activeId, fileName, content, isSaved, createdAt, savedDocs])
+
+  // Auto-save active document only when actually modified
   React.useEffect(() => {
-    if (!activeId) return
+    if (!activeId || !dirtyRef.current) return
     const timer = setTimeout(() => {
       const updated: SavedMarkdownDoc = {
         id: activeId,
@@ -178,12 +204,34 @@ export default function MarkdownRoute() {
         createdAt,
         updatedAt: Date.now(),
       }
+      dirtyRef.current = false
       setSavedDocs(upsertSavedMdDoc(updated))
-    }, 450)
+    }, 350)
     return () => clearTimeout(timer)
   }, [activeId, fileName, content, isSaved, createdAt])
 
+  // Escape exits fullscreen cleanly
+  React.useEffect(() => {
+    if (!isFullscreen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsFullscreen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isFullscreen])
+
+  const activateDoc = (item: SavedMarkdownDoc) => {
+    dirtyRef.current = false
+    setActiveId(item.id)
+    setFileName(item.fileName)
+    setContent(item.content)
+    setIsSaved(item.saved)
+    setCreatedAt(item.createdAt)
+    setOpenTabIds((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]))
+  }
+
   const openNewDoc = (initialName = 'untitled.md', initialContent = '', mode: ViewMode = 'split', markSaved = false) => {
+    if (activeId) flushActiveDoc()
     const now = Date.now()
     const newDoc: SavedMarkdownDoc = {
       id: `md-${now}-${Math.random().toString(36).slice(2, 7)}`,
@@ -194,51 +242,41 @@ export default function MarkdownRoute() {
       updatedAt: now,
     }
     setSavedDocs(upsertSavedMdDoc(newDoc))
-    setActiveId(newDoc.id)
-    setFileName(newDoc.fileName)
-    setContent(newDoc.content)
-    setIsSaved(newDoc.saved)
-    setCreatedAt(newDoc.createdAt)
+    activateDoc(newDoc)
     setViewMode(mode)
   }
 
   const openSavedDoc = (item: SavedMarkdownDoc) => {
-    setActiveId(item.id)
-    setFileName(item.fileName)
-    setContent(item.content)
-    setIsSaved(item.saved)
-    setCreatedAt(item.createdAt)
-    setViewMode(item.content.trim() ? 'split' : 'split')
+    if (activeId && activeId !== item.id) {
+      const refreshed = flushActiveDoc()
+      const freshTarget = refreshed.find((d) => d.id === item.id) ?? item
+      activateDoc(freshTarget)
+      return
+    }
+    activateDoc(item)
+  }
+
+  const closeTab = (id: string) => {
+    if (id === activeId) flushActiveDoc()
+    const nextTabs = openTabIds.filter((tid) => tid !== id)
+    setOpenTabIds(nextTabs)
+    if (activeId === id) {
+      if (nextTabs.length === 0) {
+        setActiveId(null)
+        setIsFullscreen(false)
+      } else {
+        const nextId = nextTabs[nextTabs.length - 1]
+        const target = savedDocs.find((d) => d.id === nextId)
+        if (target) activateDoc(target)
+        else setActiveId(null)
+      }
+    }
   }
 
   const handleBackToHub = () => {
-    if (activeId) {
-      const updated: SavedMarkdownDoc = {
-        id: activeId,
-        fileName: fileName.trim() || 'untitled.md',
-        content,
-        saved: isSaved,
-        createdAt,
-        updatedAt: Date.now(),
-      }
-      setSavedDocs(upsertSavedMdDoc(updated))
-    }
+    flushActiveDoc()
     setActiveId(null)
-  }
-
-  const handleManualSave = () => {
-    if (!activeId) return
-    const updated: SavedMarkdownDoc = {
-      id: activeId,
-      fileName: fileName.trim() || 'untitled.md',
-      content,
-      saved: true,
-      createdAt,
-      updatedAt: Date.now(),
-    }
-    setIsSaved(true)
-    setSavedDocs(upsertSavedMdDoc(updated))
-    toast.success(`Saved ${updated.fileName}`)
+    setIsFullscreen(false)
   }
 
   const handleDuplicateDoc = (item: SavedMarkdownDoc) => {
@@ -255,8 +293,28 @@ export default function MarkdownRoute() {
   }
 
   const handleDeleteDoc = (item: SavedMarkdownDoc) => {
-    setSavedDocs(deleteSavedMdDoc(item.id))
+    const nextDocs = deleteSavedMdDoc(item.id)
+    setSavedDocs(nextDocs)
+    const nextTabs = openTabIds.filter((tid) => tid !== item.id)
+    setOpenTabIds(nextTabs)
+    if (activeId === item.id) {
+      const fallback = nextTabs.length ? nextDocs.find((d) => d.id === nextTabs[nextTabs.length - 1]) : null
+      if (fallback) activateDoc(fallback)
+      else {
+        setActiveId(null)
+        setIsFullscreen(false)
+      }
+    }
     toast.info(`Deleted ${item.fileName}`)
+  }
+
+  // Navigate Previous / Next across Recent & Saved files
+  const activeListIndex = activeId ? savedDocs.findIndex((d) => d.id === activeId) : -1
+  const navigateFile = (dir: -1 | 1) => {
+    if (savedDocs.length <= 1 || activeListIndex < 0) return
+    const nextIdx = (activeListIndex + dir + savedDocs.length) % savedDocs.length
+    const target = savedDocs[nextIdx]
+    if (target) openSavedDoc(target)
   }
 
   // Smooth VS Code-style sash resizing for Split & Outline
@@ -318,19 +376,40 @@ export default function MarkdownRoute() {
     }
   }
 
+  // Open 1 or MULTIPLE .md files at once into tabs & recent list
   const loadFiles = async (files: File[]) => {
-    const f = files[0]
-    if (!f) return
-    if (!/\.(md|markdown|mdx|txt)$/i.test(f.name) && !f.type.startsWith('text/')) {
-      toast.error('Please choose a Markdown (.md, .markdown) or text file.')
+    const valid = files.filter((f) => /\.(md|markdown|mdx|txt)$/i.test(f.name) || f.type.startsWith('text/'))
+    if (valid.length === 0) {
+      toast.error('Please choose Markdown (.md, .markdown) or text files.')
       return
     }
     try {
-      const text = await f.text()
-      openNewDoc(f.name, text, 'split', true)
-      toast.success(`Opened ${f.name}`)
+      if (activeId) flushActiveDoc()
+      const now = Date.now()
+      const created: SavedMarkdownDoc[] = []
+      for (let i = 0; i < valid.length; i++) {
+        const f = valid[i]
+        const text = await f.text()
+        created.push({
+          id: `md-${now + i}-${Math.random().toString(36).slice(2, 7)}`,
+          fileName: f.name,
+          content: text,
+          saved: true,
+          createdAt: now + i,
+          updatedAt: now + i,
+        })
+      }
+      const existing = listSavedMdDocs()
+      const merged = saveAllMdDocs([...created, ...existing])
+      setSavedDocs(merged)
+      setOpenTabIds((prev) => [...prev, ...created.map((c) => c.id)])
+      activateDoc(created[0])
+      setViewMode('split')
+      toast.success(
+        created.length === 1 ? `Opened ${created[0].fileName}` : `Opened ${created.length} Markdown files`,
+      )
     } catch {
-      toast.error('Could not read file')
+      toast.error('Could not read selected file(s)')
     }
   }
 
@@ -342,6 +421,7 @@ export default function MarkdownRoute() {
       }
       return match
     })
+    dirtyRef.current = true
     setContent(next)
   }
 
@@ -389,6 +469,25 @@ export default function MarkdownRoute() {
     })
   }, [savedDocs, hubSearch, hubFilter])
 
+  const sidebarDocs = React.useMemo(() => {
+    const q = sidebarSearch.trim().toLowerCase()
+    if (!q) return savedDocs
+    return savedDocs.filter((d) => d.fileName.toLowerCase().includes(q) || d.content.toLowerCase().includes(q))
+  }, [savedDocs, sidebarSearch])
+
+  const openTabs = React.useMemo(() => {
+    const byId = new Map(savedDocs.map((d) => [d.id, d]))
+    return openTabIds
+      .map((id) => {
+        if (id === activeId) {
+          return { id, fileName: fileName.trim() || 'untitled.md', saved: isSaved }
+        }
+        const found = byId.get(id)
+        return found ? { id: found.id, fileName: found.fileName, saved: found.saved } : null
+      })
+      .filter(Boolean) as { id: string; fileName: string; saved: boolean }[]
+  }, [openTabIds, savedDocs, activeId, fileName, isSaved])
+
   const outlineVisible = showToc && viewMode !== 'source'
 
   /* ═══════════════════════ VIEW 1: FRESH MARKDOWN HUB ═══════════════════════ */
@@ -413,6 +512,7 @@ export default function MarkdownRoute() {
         <input
           ref={fileInputRef}
           type="file"
+          multiple
           accept=".md,.markdown,.mdx,.txt,text/markdown,text/plain"
           className="sr-only"
           onChange={(e) => {
@@ -426,7 +526,7 @@ export default function MarkdownRoute() {
           <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-xs">
             <div className="flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-primary bg-card px-10 py-8 shadow-lg">
               <FileCode2 className="size-10 text-primary" />
-              <p className="text-base font-semibold">Drop your .md file to open in Preview</p>
+              <p className="text-base font-semibold">Drop one or multiple .md files to open</p>
               <p className="text-xs text-muted-foreground">Rendered locally — files never leave your device</p>
             </div>
           </div>
@@ -437,10 +537,10 @@ export default function MarkdownRoute() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-semibold tracking-tight">Markdown Studio</h1>
-              <Badge variant="primary">VS Code-Style Preview</Badge>
+              <Badge variant="primary">Multi-File &amp; Live Preview</Badge>
             </div>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Open a <code>.md</code> file, start writing fresh, or continue from your recently saved Markdown documents.
+              Open one or multiple <code>.md</code> files at once, switch between tabs, or reopen your saved files below.
             </p>
           </div>
           <Button size="sm" onClick={() => openNewDoc('untitled.md', '', 'split', false)}>
@@ -452,7 +552,7 @@ export default function MarkdownRoute() {
         <section className="space-y-2.5">
           <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">Quick Start</h2>
           <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
-            {/* Primary Open .md Action Box */}
+            {/* Primary Open .md Action Box (supports multiple files) */}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -463,10 +563,10 @@ export default function MarkdownRoute() {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-semibold text-foreground group-hover:text-primary">
-                  Open .md File
+                  Open .md Files
                 </div>
                 <div className="mt-0.5 text-xs text-muted-foreground">
-                  Browse or drop <code>.md</code>, <code>.markdown</code>, or <code>.txt</code>
+                  Select or drop one or multiple <code>.md</code> / <code>.txt</code> files
                 </div>
               </div>
             </button>
@@ -569,8 +669,8 @@ export default function MarkdownRoute() {
                 </div>
                 <p className="text-sm font-medium">No recent Markdown files yet</p>
                 <p className="max-w-md text-xs text-muted-foreground">
-                  Open any <code>.md</code> file or create a new document above. Everything you edit or save will appear
-                  here automatically for instant access.
+                  Open one or multiple <code>.md</code> files or create a new document above. Everything you open or
+                  save appears here automatically.
                 </p>
               </CardContent>
             </Card>
@@ -671,10 +771,13 @@ export default function MarkdownRoute() {
     )
   }
 
-  /* ═══════════════════════ VIEW 2: VS CODE-STYLE EDITOR ═══════════════════════ */
+  /* ═══════════════════════ VIEW 2: MULTI-FILE VS CODE-STYLE EDITOR ═══════════════════════ */
   return (
     <div
-      className="relative flex h-full w-full flex-col overflow-hidden bg-background text-foreground"
+      className={cn(
+        'flex flex-col overflow-hidden bg-background text-foreground',
+        isFullscreen ? 'fixed inset-0 z-50 h-screen w-screen' : 'relative h-full w-full',
+      )}
       onDragOver={(e) => {
         e.preventDefault()
         if (!pageDragging) setPageDragging(true)
@@ -692,6 +795,7 @@ export default function MarkdownRoute() {
       <input
         ref={fileInputRef}
         type="file"
+        multiple
         accept=".md,.markdown,.mdx,.txt,text/markdown,text/plain"
         className="sr-only"
         onChange={(e) => {
@@ -705,66 +809,141 @@ export default function MarkdownRoute() {
         <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-xs">
           <div className="flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-primary bg-card px-10 py-8 shadow-lg">
             <FileCode2 className="size-10 text-primary" />
-            <p className="text-base font-semibold">Drop your .md file to open in Preview</p>
+            <p className="text-base font-semibold">Drop one or multiple .md files to open in tabs</p>
             <p className="text-xs text-muted-foreground">Rendered locally — files never leave your device</p>
           </div>
         </div>
       )}
 
-      {/* VS Code-style Editor Tab Bar */}
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-secondary/45 px-2 pt-1.5">
-        {/* Back + Active File Tab */}
-        <div className="flex min-w-0 items-end gap-1.5">
+      {/* Compact Responsive Multi-Tab Strip */}
+      <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-border bg-secondary/50 px-2 py-1 scrollbar-thin">
+        <Button
+          size="xs"
+          variant="ghost"
+          className="h-7 shrink-0 px-2 text-xs text-muted-foreground hover:text-foreground"
+          onClick={handleBackToHub}
+          title="Back to Markdown Hub"
+        >
+          <ArrowLeft className="size-3.5" />
+          <span className="hidden sm:inline">Back</span>
+        </Button>
+
+        {/* Open File Tabs */}
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto scrollbar-thin">
+          {openTabs.map((tab) => {
+            const active = tab.id === activeId
+            return (
+              <div
+                key={tab.id}
+                onClick={() => {
+                  if (active) return
+                  const target = savedDocs.find((d) => d.id === tab.id)
+                  if (target) openSavedDoc(target)
+                }}
+                className={cn(
+                  'group flex max-w-[200px] shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors',
+                  active
+                    ? 'border-border bg-card font-medium text-foreground shadow-xs'
+                    : 'border-transparent bg-transparent text-muted-foreground hover:bg-secondary hover:text-foreground',
+                )}
+              >
+                <FileCode2 className="size-3.5 shrink-0 text-[#007acc] dark:text-[#3794ff]" />
+                {active ? (
+                  <input
+                    type="text"
+                    value={fileName}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => {
+                      dirtyRef.current = true
+                      setFileName(e.target.value)
+                    }}
+                    aria-label="Markdown filename"
+                    className="w-24 bg-transparent font-medium text-foreground outline-none focus:underline sm:w-32"
+                  />
+                ) : (
+                  <span className="truncate">{tab.fileName}</span>
+                )}
+                <button
+                  type="button"
+                  aria-label={`Close ${tab.fileName}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    closeTab(tab.id)
+                  }}
+                  className="rounded p-0.5 text-muted-foreground opacity-50 hover:bg-secondary hover:text-foreground hover:opacity-100"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            )
+          })}
+
           <Button
-            size="xs"
-            variant="outline"
-            className="mb-1 text-xs"
-            onClick={handleBackToHub}
-            title="Back to Recent Files"
+            size="icon-xs"
+            variant="ghost"
+            className="shrink-0 text-muted-foreground hover:text-foreground"
+            title="New Markdown tab"
+            aria-label="New Markdown tab"
+            onClick={() => openNewDoc('untitled.md', '', 'split', false)}
           >
-            <ArrowLeft className="size-3.5" /> Back
+            <Plus className="size-3.5" />
           </Button>
-
-          <div className="flex items-center gap-2 rounded-t-md border border-b-0 border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground">
-            <FileCode2 className="size-3.5 shrink-0 text-[#007acc] dark:text-[#3794ff]" />
-            <input
-              type="text"
-              value={fileName}
-              onChange={(e) => setFileName(e.target.value)}
-              aria-label="Markdown filename"
-              className="w-32 bg-transparent font-medium text-foreground outline-none focus:underline sm:w-44"
-            />
-            <Badge variant={isSaved ? 'success' : 'outline'} className="text-[10px]">
-              {isSaved ? (
-                <>
-                  <CheckCircle2 className="mr-0.5 size-2.5" /> Saved
-                </>
-              ) : (
-                'Draft'
-              )}
-            </Badge>
-          </div>
-
           <Button
             size="xs"
             variant="ghost"
-            className="mb-1 text-xs text-muted-foreground hover:text-foreground"
-            onClick={handleManualSave}
-          >
-            <Save className="size-3.5" /> Save
-          </Button>
-          <Button
-            size="xs"
-            variant="ghost"
-            className="mb-1 text-xs text-muted-foreground hover:text-foreground"
+            className="h-7 shrink-0 px-2 text-xs text-muted-foreground hover:text-foreground"
             onClick={() => fileInputRef.current?.click()}
+            title="Open one or multiple .md files"
           >
-            <Upload className="size-3.5" /> Open .md
+            <Upload className="size-3.5" />
+            <span className="hidden md:inline">Open</span>
           </Button>
         </div>
+      </div>
 
-        {/* VS Code-style Right Toolbar Actions */}
-        <div className="mb-1 flex flex-wrap items-center gap-1.5 pr-1">
+      {/* Ultra-Compact Responsive Actions Bar */}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-1.5 border-b border-border bg-card px-2 py-1">
+        <div className="flex flex-wrap items-center gap-1">
+          {/* Mobile-only Files toggle (desktop toggle lives inside the Files sidebar itself) */}
+          <Button
+            size="icon-xs"
+            variant={showFilesSidebar ? 'secondary' : 'ghost'}
+            className="md:hidden"
+            onClick={() => setShowFilesSidebar((v) => !v)}
+            title="Toggle Files list"
+          >
+            {showFilesSidebar ? <PanelLeftClose className="size-3.5" /> : <PanelLeftOpen className="size-3.5" />}
+          </Button>
+
+          {/* Prev / Next File Navigation */}
+          {savedDocs.length > 1 && (
+            <div className="inline-flex items-center rounded-md border border-border bg-background/70 p-0.5">
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                className="size-6"
+                onClick={() => navigateFile(-1)}
+                title="Previous file"
+                aria-label="Previous recent file"
+              >
+                <ChevronLeft className="size-3.5" />
+              </Button>
+              <span className="px-1 text-[11px] text-muted-foreground tabular-nums">
+                {activeListIndex + 1}/{savedDocs.length}
+              </span>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                className="size-6"
+                onClick={() => navigateFile(1)}
+                title="Next file"
+                aria-label="Next recent file"
+              >
+                <ChevronRight className="size-3.5" />
+              </Button>
+            </div>
+          )}
+
           {/* View Mode Toggle (Preview / Split / Source) */}
           <div className="inline-flex rounded-md border border-border bg-background/70 p-0.5">
             {(
@@ -782,7 +961,7 @@ export default function MarkdownRoute() {
                   type="button"
                   onClick={() => setViewMode(m.id)}
                   className={cn(
-                    'inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11.5px] font-medium transition-colors',
+                    'inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium transition-colors',
                     active
                       ? 'bg-primary text-primary-foreground shadow-xs'
                       : 'text-muted-foreground hover:text-foreground',
@@ -794,30 +973,34 @@ export default function MarkdownRoute() {
               )
             })}
           </div>
+        </div>
 
-          {/* Copyable Content Quick Buttons */}
+        {/* Right Compact Controls */}
+        <div className="flex flex-wrap items-center gap-1">
           <Button
             size="xs"
-            variant="outline"
+            variant="ghost"
+            className="h-7 px-2 text-xs"
             disabled={!content.trim()}
             onClick={() => triggerCopy(markdownToPlainText(content), 'text', 'preview text')}
             title="Copy readable plain text"
           >
             {copiedKey === 'text' ? <Check className="size-3 text-success" /> : <Copy className="size-3" />}
-            Copy Text
+            <span className="hidden lg:inline">Copy Text</span>
           </Button>
           <Button
             size="xs"
-            variant="outline"
+            variant="ghost"
+            className="h-7 px-2 text-xs"
             disabled={!content.trim()}
             onClick={() => triggerCopy(content, 'md', 'raw Markdown')}
             title="Copy raw Markdown source"
           >
             {copiedKey === 'md' ? <Check className="size-3 text-success" /> : <FileCode2 className="size-3" />}
-            Copy MD
+            <span className="hidden lg:inline">Copy MD</span>
           </Button>
 
-          {/* Font Size & Width */}
+          {/* Font Size */}
           <div className="hidden items-center gap-0.5 rounded-md border border-border bg-background/70 px-1 py-0.5 xl:inline-flex">
             <Type className="mx-0.5 size-3 text-muted-foreground" />
             {(['sm', 'md', 'lg'] as const).map((sz) => (
@@ -826,7 +1009,7 @@ export default function MarkdownRoute() {
                 type="button"
                 onClick={() => setFontSize(sz)}
                 className={cn(
-                  'rounded px-1.5 py-0.5 text-[10.5px] font-medium uppercase',
+                  'rounded px-1.5 py-0.5 text-[10px] font-medium uppercase',
                   fontSize === sz ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground',
                 )}
               >
@@ -835,8 +1018,8 @@ export default function MarkdownRoute() {
             ))}
           </div>
 
+          {/* Reading Width */}
           <div className="hidden items-center gap-0.5 rounded-md border border-border bg-background/70 px-1 py-0.5 2xl:inline-flex">
-            <Maximize2 className="mx-0.5 size-3 text-muted-foreground" />
             {(
               [
                 { id: 'narrow', label: 'Compact' },
@@ -849,7 +1032,7 @@ export default function MarkdownRoute() {
                 type="button"
                 onClick={() => setReadingWidth(w.id)}
                 className={cn(
-                  'rounded px-1.5 py-0.5 text-[10.5px] font-medium',
+                  'rounded px-1.5 py-0.5 text-[10px] font-medium',
                   readingWidth === w.id ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground',
                 )}
               >
@@ -863,18 +1046,19 @@ export default function MarkdownRoute() {
             <Button
               size="xs"
               variant={showToc ? 'secondary' : 'ghost'}
+              className="h-7 px-2 text-xs"
               onClick={() => setShowToc((v) => !v)}
               title="Toggle Outline Sidebar"
             >
               <ListTree className="size-3.5" />
-              <span className="hidden md:inline">Outline</span>
+              <span className="hidden xl:inline">Outline</span>
             </Button>
           )}
 
           {/* Export Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="xs" variant="outline" disabled={!content.trim()}>
+              <Button size="xs" variant="outline" className="h-7 px-2 text-xs" disabled={!content.trim()}>
                 <Download className="size-3" />
                 <span className="hidden sm:inline">Export</span>
               </Button>
@@ -895,23 +1079,139 @@ export default function MarkdownRoute() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {content && (
-            <Button
-              size="icon-xs"
-              variant="ghost"
-              aria-label="Clear content"
-              title="Clear content"
-              onClick={() => setContent('')}
-            >
-              <Trash2 className="size-3.5 text-muted-foreground" />
-            </Button>
-          )}
+          {/* Fullscreen Content Mode */}
+          <Button
+            size="xs"
+            variant={isFullscreen ? 'default' : 'outline'}
+            className="h-7 px-2 text-xs"
+            onClick={() => setIsFullscreen((v) => !v)}
+            title={isFullscreen ? 'Exit Fullscreen (Esc)' : 'Fullscreen Content View'}
+            aria-label={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+          >
+            {isFullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+            <span className="hidden sm:inline">{isFullscreen ? 'Exit' : 'Fullscreen'}</span>
+          </Button>
         </div>
       </div>
 
-      {/* Main VS Code-style Resizable Split & Outline Surface */}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Left/Right Editor + Preview Container */}
+      {/* Main Surface: Collapsible Recent Files Sidebar + Resizable Split + Outline */}
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        {/* Left Recent / Saved Files Navigator Sidebar (collapse button lives inside Files section) */}
+        {showFilesSidebar ? (
+          <aside className="absolute inset-y-0 left-0 z-20 flex w-56 shrink-0 flex-col border-r border-border bg-card shadow-lg md:static md:bg-secondary/20 md:shadow-none">
+            <div className="flex items-center justify-between border-b border-border/60 px-2.5 py-1.5">
+              <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
+                Files ({savedDocs.length})
+              </span>
+              <div className="flex items-center gap-0.5">
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  title="Open .md files"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="size-3" />
+                </Button>
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  title="New .md file"
+                  onClick={() => openNewDoc('untitled.md', '', 'split', false)}
+                >
+                  <Plus className="size-3" />
+                </Button>
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  title="Collapse Files panel"
+                  aria-label="Collapse Files panel"
+                  onClick={() => setShowFilesSidebar(false)}
+                >
+                  <PanelLeftClose className="size-3.5" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="border-b border-border/50 p-1.5">
+              <div className="relative">
+                <Search className="pointer-events-none absolute top-1/2 left-2 size-3 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={sidebarSearch}
+                  onChange={(e) => setSidebarSearch(e.target.value)}
+                  placeholder="Filter files…"
+                  className="h-7 pl-7 text-[11px]"
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 space-y-0.5 overflow-y-auto p-1.5 scrollbar-thin">
+              {sidebarDocs.map((item) => {
+                const isActive = item.id === activeId
+                return (
+                  <div
+                    key={item.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openSavedDoc(item)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        openSavedDoc(item)
+                      }
+                    }}
+                    className={cn(
+                      'group flex cursor-pointer items-center justify-between gap-1.5 rounded-lg px-2 py-1.5 text-xs transition-colors',
+                      isActive
+                        ? 'bg-primary/12 font-medium text-primary'
+                        : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
+                    )}
+                  >
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <FileCode2 className="size-3.5 shrink-0 opacity-80" />
+                      <div className="min-w-0">
+                        <div className="truncate font-mono text-[11.5px]">
+                          {isActive ? fileName : item.fileName}
+                        </div>
+                        <div className="text-[10px] opacity-70 tabular-nums">
+                          {formatRelativeTime(item.updatedAt)}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      title={`Delete ${item.fileName}`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDeleteDoc(item)
+                      }}
+                      className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/15 hover:text-destructive group-hover:opacity-100"
+                    >
+                      <Trash2 className="size-3" />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </aside>
+        ) : (
+          /* Collapsed Slim Rail inside Files section to re-expand cleanly */
+          <div className="hidden w-9 shrink-0 flex-col items-center gap-2 border-r border-border bg-secondary/20 py-2 md:flex">
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              title="Expand Files panel"
+              aria-label="Expand Files panel"
+              onClick={() => setShowFilesSidebar(true)}
+            >
+              <PanelLeftOpen className="size-3.5" />
+            </Button>
+            <span className="rounded bg-secondary px-1 py-0.5 text-[10px] font-medium text-muted-foreground tabular-nums">
+              {savedDocs.length}
+            </span>
+          </div>
+        )}
+
+        {/* Center Editor + Preview Container */}
         <div
           ref={splitContainerRef}
           className={cn(
@@ -919,7 +1219,7 @@ export default function MarkdownRoute() {
             viewMode === 'split' ? 'flex-col md:flex-row' : 'flex-col',
           )}
         >
-          {/* Source Editor Pane (with VS Code-style line number gutter) */}
+          {/* Source Editor Pane */}
           {(viewMode === 'source' || viewMode === 'split') && (
             <div
               style={viewMode === 'split' ? { flexBasis: `${splitRatio}%` } : undefined}
@@ -930,13 +1230,13 @@ export default function MarkdownRoute() {
                   : 'flex-1',
               )}
             >
-              <div className="flex items-center justify-between border-b border-border/60 bg-secondary/25 px-3 py-1 text-[11px] text-muted-foreground">
-                <span className="truncate font-mono">{fileName}</span>
+              <div className="flex items-center justify-between gap-2 border-b border-border/60 bg-secondary/25 px-3 py-1 text-[11px] text-muted-foreground">
+                <span className="min-w-0 truncate font-mono">{fileName}</span>
                 <button
                   type="button"
                   disabled={!content}
                   onClick={() => triggerCopy(content, 'source-bar', 'Markdown source')}
-                  className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-secondary hover:text-foreground disabled:opacity-40"
+                  className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 whitespace-nowrap hover:bg-secondary hover:text-foreground disabled:opacity-40"
                 >
                   {copiedKey === 'source-bar' ? <Check className="size-3 text-success" /> : <Copy className="size-3" />}
                   Copy Source
@@ -954,21 +1254,24 @@ export default function MarkdownRoute() {
                 </div>
                 <textarea
                   value={content}
-                  onChange={(e) => setContent(e.target.value)}
+                  onChange={(e) => {
+                    dirtyRef.current = true
+                    setContent(e.target.value)
+                  }}
                   onScroll={(e) => {
                     if (gutterRef.current) {
                       gutterRef.current.scrollTop = e.currentTarget.scrollTop
                     }
                   }}
                   spellCheck={false}
-                  placeholder={'# Start typing or paste Markdown here...\n\nOr drop a .md file anywhere on this window.'}
+                  placeholder={'# Start typing or paste Markdown here...\n\nOr drop one or multiple .md files anywhere on this window.'}
                   className="h-full w-full flex-1 resize-none overflow-y-auto bg-transparent px-4 py-4 font-mono text-[13px] leading-[1.6] text-foreground outline-none scrollbar-thin"
                 />
               </div>
             </div>
           )}
 
-          {/* Smooth Draggable Split Resize Sash (VS Code style) */}
+          {/* Smooth Draggable Split Resize Sash */}
           {viewMode === 'split' && (
             <div
               role="separator"
@@ -986,16 +1289,16 @@ export default function MarkdownRoute() {
             </div>
           )}
 
-          {/* VS Code-style Theme-Based Markdown Preview Pane */}
+          {/* Live Markdown Preview Pane */}
           {(viewMode === 'preview' || viewMode === 'split') && (
             <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-card text-card-foreground">
-              <div className="flex items-center justify-between border-b border-border/60 bg-secondary/25 px-3 py-1 text-[11px] text-muted-foreground">
-                <span className="truncate font-mono">Preview {fileName}</span>
+              <div className="flex items-center justify-between gap-2 border-b border-border/60 bg-secondary/25 px-3 py-1 text-[11px] text-muted-foreground">
+                <span className="min-w-0 truncate font-mono">Preview · {fileName}</span>
                 <button
                   type="button"
                   disabled={!content.trim()}
                   onClick={() => triggerCopy(markdownToPlainText(content), 'preview-bar', 'preview text')}
-                  className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-secondary hover:text-foreground disabled:opacity-40"
+                  className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 whitespace-nowrap hover:bg-secondary hover:text-foreground disabled:opacity-40"
                 >
                   {copiedKey === 'preview-bar' ? <Check className="size-3 text-success" /> : <Copy className="size-3" />}
                   Copy Preview
@@ -1016,12 +1319,11 @@ export default function MarkdownRoute() {
                       </div>
                       <p className="text-sm font-medium text-foreground">Live Markdown Preview</p>
                       <p className="mt-1 max-w-sm text-xs text-muted-foreground">
-                        Start writing or pasting Markdown on the left, drop a <code>.md</code> file here, or open one
-                        from your device.
+                        Start writing or pasting Markdown on the left, or drop multiple <code>.md</code> files here.
                       </p>
                       <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                         <Button size="xs" variant="default" onClick={() => fileInputRef.current?.click()}>
-                          <Upload className="size-3" /> Open .md File
+                          <Upload className="size-3" /> Open .md Files
                         </Button>
                         <Button
                           size="xs"
@@ -1042,7 +1344,7 @@ export default function MarkdownRoute() {
           )}
         </div>
 
-        {/* Smooth Draggable Outline Resize Sash (lg+ screens) */}
+        {/* Smooth Draggable Outline Resize Sash */}
         {outlineVisible && (
           <div
             role="separator"
@@ -1060,7 +1362,7 @@ export default function MarkdownRoute() {
           </div>
         )}
 
-        {/* VS Code-style Resizable Outline Sidebar (lg+) */}
+        {/* Resizable Outline Sidebar */}
         {outlineVisible && (
           <aside
             style={{ width: `${outlineWidth}px` }}
@@ -1101,7 +1403,7 @@ export default function MarkdownRoute() {
         )}
       </div>
 
-      {/* VS Code-style Bottom Status Bar */}
+      {/* Bottom Status Bar */}
       <footer className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-secondary/50 px-3 py-1 text-[11px] text-muted-foreground">
         <div className="flex items-center gap-3">
           <span className="inline-flex items-center gap-1 font-medium text-foreground/85">
@@ -1109,6 +1411,7 @@ export default function MarkdownRoute() {
           </span>
           <span>UTF-8</span>
           <span>Ln {doc.stats.lines}</span>
+          {openTabs.length > 1 && <span>{openTabs.length} open tabs</span>}
         </div>
         <div className="flex items-center gap-3">
           <span className="inline-flex items-center gap-1">

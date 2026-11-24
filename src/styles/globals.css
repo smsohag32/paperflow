@@ -242,3 +242,16 @@
 button{
   @apply cursor-pointer
 }
+
+/* Crisp KaTeX formula rendering with clean Bengali / Unicode font support */
+.katex {
+  font-size: 1.08em;
+  color: var(--foreground);
+}
+.katex-display {
+  margin: 0.25rem 0;
+}
+.katex .text,
+.katex .mord.text {
+  font-family: var(--font-sans);
+}

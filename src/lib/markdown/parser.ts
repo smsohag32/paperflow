@@ -18,6 +18,7 @@ export type MdBlock =
   | { type: 'heading'; level: 1 | 2 | 3 | 4 | 5 | 6; id: string; text: string }
   | { type: 'paragraph'; text: string }
   | { type: 'code'; lang: string; code: string }
+  | { type: 'math'; tex: string }
   | { type: 'blockquote'; blocks: MdBlock[] }
   | { type: 'alert'; kind: AlertKind; blocks: MdBlock[] }
   | { type: 'list'; ordered: boolean; start: number; items: MdListItem[] }
@@ -27,6 +28,7 @@ export type MdBlock =
 export type MdInline =
   | { type: 'text'; value: string }
   | { type: 'code'; value: string }
+  | { type: 'math'; tex: string; display: boolean }
   | { type: 'strong'; children: MdInline[] }
   | { type: 'em'; children: MdInline[] }
   | { type: 'del'; children: MdInline[] }
@@ -167,6 +169,7 @@ function isBlockStarter(lines: string[], idx: number): boolean {
   if (!line || !line.trim()) return true
   if (/^\s{0,3}#{1,6}\s+/.test(line)) return true
   if (isFenceStart(line)) return true
+  if (/^\s{0,3}(\$\$|\\\[)/.test(line)) return true
   if (/^\s{0,3}>\s?/.test(line)) return true
   if (isHr(line)) return true
   if (isListLine(line)) return true
@@ -198,6 +201,58 @@ function parseBlocks(
     // Blank line
     if (!line.trim()) {
       i++
+      continue
+    }
+
+    // Display Math Block ($$ ... $$ or \[ ... \], single-line or multi-line)
+    const trimmedMath = line.trim()
+    if (trimmedMath.startsWith('$$')) {
+      const rest = trimmedMath.slice(2)
+      if (rest.endsWith('$$') && rest.length >= 2) {
+        blocks.push({ type: 'math', tex: rest.slice(0, -2).trim() })
+        i++
+        continue
+      }
+      const mathLines: string[] = rest ? [rest] : []
+      i++
+      while (i < lines.length) {
+        const cur = lines[i]
+        const closeIdx = cur.indexOf('$$')
+        if (closeIdx !== -1) {
+          const before = cur.slice(0, closeIdx)
+          if (before.trim()) mathLines.push(before)
+          i++
+          break
+        }
+        mathLines.push(cur)
+        i++
+      }
+      blocks.push({ type: 'math', tex: mathLines.join('\n').trim() })
+      continue
+    }
+
+    if (trimmedMath.startsWith('\\[')) {
+      const rest = trimmedMath.slice(2)
+      if (rest.endsWith('\\]') && rest.length >= 2) {
+        blocks.push({ type: 'math', tex: rest.slice(0, -2).trim() })
+        i++
+        continue
+      }
+      const mathLines: string[] = rest ? [rest] : []
+      i++
+      while (i < lines.length) {
+        const cur = lines[i]
+        const closeIdx = cur.indexOf('\\]')
+        if (closeIdx !== -1) {
+          const before = cur.slice(0, closeIdx)
+          if (before.trim()) mathLines.push(before)
+          i++
+          break
+        }
+        mathLines.push(cur)
+        i++
+      }
+      blocks.push({ type: 'math', tex: mathLines.join('\n').trim() })
       continue
     }
 
@@ -379,6 +434,76 @@ export function parseInline(text: string): MdInline[] {
       continue
     }
 
+    // Display Math inside paragraph/list item ($$...$$ or \[...\]) — MUST run before backslash escapes!
+    if (text[i] === '$' && text[i + 1] === '$') {
+      const end = text.indexOf('$$', i + 2)
+      if (end !== -1) {
+        const tex = text.slice(i + 2, end).trim()
+        if (tex) {
+          flush()
+          tokens.push({ type: 'math', tex, display: true })
+          i = end + 2
+          continue
+        }
+      }
+    }
+
+    if (text[i] === '\\' && text[i + 1] === '[') {
+      const end = text.indexOf('\\]', i + 2)
+      if (end !== -1) {
+        const tex = text.slice(i + 2, end).trim()
+        if (tex) {
+          flush()
+          tokens.push({ type: 'math', tex, display: true })
+          i = end + 2
+          continue
+        }
+      }
+    }
+
+    // Inline Math (\(...\) or $...$) — avoids false positives on currency like "$100 and $200"
+    if (text[i] === '\\' && text[i + 1] === '(') {
+      const end = text.indexOf('\\)', i + 2)
+      if (end !== -1) {
+        const tex = text.slice(i + 2, end).trim()
+        if (tex) {
+          flush()
+          tokens.push({ type: 'math', tex, display: false })
+          i = end + 2
+          continue
+        }
+      }
+    }
+
+    if (text[i] === '$' && text[i + 1] !== '$' && text[i + 1] !== ' ' && text[i + 1] !== undefined) {
+      let end = i + 1
+      let found = -1
+      while (end < text.length) {
+        if (text[end] === '\\') {
+          end += 2
+          continue
+        }
+        if (text[end] === '\n') break
+        if (text[end] === '$') {
+          if (text[end - 1] !== ' ' && text[end + 1] !== '$') {
+            found = end
+          }
+          break
+        }
+        end++
+      }
+      if (found !== -1) {
+        const tex = text.slice(i + 1, found).trim()
+        // Treat as math if it contains a LaTeX command/symbol or isn't just a plain number price
+        if (tex && !/^\d[\d,.]*$/.test(tex)) {
+          flush()
+          tokens.push({ type: 'math', tex, display: false })
+          i = found + 1
+          continue
+        }
+      }
+    }
+
     // Backslash escape
     if (text[i] === '\\' && i + 1 < text.length && /[\\`*_{}[\]()#+\-.!|>~]/.test(text[i + 1])) {
       buf += text[i + 1]
@@ -532,6 +657,8 @@ export function stripInlineMarkdown(text: string): string {
           case 'code':
           case 'kbd':
             return n.value
+          case 'math':
+            return n.tex
           case 'image':
             return n.alt
           case 'br':
@@ -611,6 +738,10 @@ function inlineToHtml(nodes: MdInline[]): string {
           return escapeHtml(n.value)
         case 'code':
           return `<code>${escapeHtml(n.value)}</code>`
+        case 'math':
+          return n.display
+            ? `<div class="math-display">$$${escapeHtml(n.tex)}$$</div>`
+            : `<span class="math-inline">$${escapeHtml(n.tex)}$</span>`
         case 'kbd':
           return `<kbd>${escapeHtml(n.value)}</kbd>`
         case 'br':
@@ -640,6 +771,8 @@ function blocksToHtml(blocks: MdBlock[]): string {
           return `<p>${inlineToHtml(parseInline(b.text))}</p>`
         case 'code':
           return `<pre><code${b.lang ? ` class="language-${escapeHtml(b.lang)}"` : ''}>${escapeHtml(b.code)}</code></pre>`
+        case 'math':
+          return `<div class="math-display">$$${escapeHtml(b.tex)}$$</div>`
         case 'blockquote':
           return `<blockquote>${blocksToHtml(b.blocks)}</blockquote>`
         case 'alert':
@@ -699,6 +832,8 @@ function blocksToPlainText(blocks: MdBlock[]): string {
           return stripInlineMarkdown(b.text)
         case 'code':
           return b.code
+        case 'math':
+          return b.tex
         case 'blockquote':
           return blocksToPlainText(b.blocks)
         case 'alert':
