@@ -25,6 +25,8 @@ interface PageCanvasProps {
   onDeleteAnnotation: (id: string) => void
   onSwitchToSelect?: () => void
   onCropChange: (crop: { x: number; y: number; w: number; h: number }) => void
+  /** Optional CSS filter applied smoothly to the rendered PDF page (e.g. Dark Reader / Invert / Sepia) */
+  canvasFilter?: string
 }
 
 /** Cache object URLs for image/signature assets so we don't re-read IDB on every render. */
@@ -67,6 +69,7 @@ export function PageCanvas({
   onDeleteAnnotation,
   onSwitchToSelect,
   onCropChange,
+  canvasFilter,
 }: PageCanvasProps) {
   const canvasRef = React.useRef<HTMLCanvasElement>(null)
   const textLayerRef = React.useRef<HTMLDivElement>(null)
@@ -500,7 +503,11 @@ export function PageCanvas({
         tool === 'pan' ? 'cursor-grab' : tool === 'select' ? '' : 'cursor-crosshair',
       )}
     >
-      <canvas ref={canvasRef} className="pointer-events-none block size-full" />
+      <canvas
+        ref={canvasRef}
+        style={canvasFilter ? { filter: canvasFilter } : undefined}
+        className="pointer-events-none block size-full transition-[filter] duration-200"
+      />
 
       {/* Native PDF.js Selectable Text Layer */}
       <div

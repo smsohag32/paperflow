@@ -61,6 +61,9 @@ import {
   FileText,
   Clock,
   ArrowLeft,
+  Moon,
+  Sun,
+  Printer,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -84,7 +87,12 @@ import { PasswordDialog } from '@/components/shared/Dialogs'
 import { PageThumbnail } from '@/components/pdf-viewer/PageThumbnail'
 import { PageCanvas } from '@/components/editor/PageCanvas'
 import { useWorkspace } from '@/stores/workspace'
-import { exportWorkspacePdf } from '@/lib/pdf/export-workspace'
+import {
+  exportWorkspacePdf,
+  exportFilteredWorkspacePdf,
+  PDF_READING_MODES,
+  type PdfReadingColorMode,
+} from '@/lib/pdf/export-workspace'
 import { ACCEPTED_UNIVERSAL_FILES, ensurePdfFile } from '@/lib/pdf/convert'
 import { downloadBlob, pdfBlob } from '@/lib/utils/download'
 import {
@@ -111,6 +119,7 @@ function SortableThumb({
   index,
   active,
   selected,
+  canvasFilter,
   onSelect,
   onRotate,
   onDuplicate,
@@ -123,6 +132,7 @@ function SortableThumb({
   index: number
   active: boolean
   selected: boolean
+  canvasFilter?: string
   onSelect: (e: React.MouseEvent) => void
   onRotate: () => void
   onDuplicate: () => void
@@ -144,8 +154,12 @@ function SortableThumb({
           {...listeners}
           onClick={onSelect}
           className={cn(
-            'group relative flex cursor-pointer flex-col items-center gap-1 rounded-lg border p-1.5 transition-colors',
-            active ? 'border-primary bg-primary/5' : selected ? 'border-primary/50 bg-secondary' : 'border-transparent hover:bg-secondary/60',
+            'group relative z-10 flex cursor-pointer flex-col items-center gap-1 rounded-xl border p-1.5 transition-all duration-200',
+            active
+              ? 'border-transparent'
+              : selected
+                ? 'border-primary/50 bg-secondary/80'
+                : 'border-transparent hover:bg-secondary/50',
             isDragging && 'z-20 opacity-70 shadow-md',
           )}
         >
@@ -154,10 +168,13 @@ function SortableThumb({
             sourcePageIndex={page.sourcePageIndex}
             rotation={page.rotation}
             bgColor={page.bgColor}
+            canvasFilter={canvasFilter}
             priority={active ? 5 : 20}
           />
           <div className="flex w-full items-center justify-between px-0.5 text-[11px] text-muted-foreground">
-            <span className="font-medium">{index + 1}</span>
+            <span className={cn('font-medium transition-colors', active && 'text-primary font-semibold')}>
+              {index + 1}
+            </span>
             {page.annotations.length > 0 && (
               <span className="rounded bg-primary/15 px-1 text-[10px] text-primary">{page.annotations.length}</span>
             )}
@@ -266,6 +283,8 @@ export default function WorkspaceRoute() {
   const restoreOriginal = useWorkspace((s) => s.restoreOriginal)
 
   const [exporting, setExporting] = React.useState(false)
+  const [exportingFiltered, setExportingFiltered] = React.useState(false)
+  const [readingMode, setReadingMode] = React.useState<PdfReadingColorMode>('normal')
   const [isFullscreen, setIsFullscreen] = React.useState(false)
   const [rightPanelOpen, setRightPanelOpen] = React.useState(false)
   const [panelTab, setPanelTab] = React.useState<'element' | 'page' | 'doc'>('page')
@@ -299,17 +318,35 @@ export default function WorkspaceRoute() {
   const imgInputRef = React.useRef<HTMLInputElement>(null)
   const centerRef = React.useRef<HTMLDivElement>(null)
   const thumbListRef = React.useRef<HTMLDivElement>(null)
+  const [thumbFocus, setThumbFocus] = React.useState<{ top: number; height: number } | null>(null)
 
-  // Keep active page thumbnail scrolled to the top of the left sidebar
-  React.useEffect(() => {
-    if (!activePageId || !thumbListRef.current) return
-    const escaped = globalThis.CSS?.escape ? globalThis.CSS.escape(activePageId) : activePageId
-    const el = thumbListRef.current.querySelector<HTMLElement>(`[data-thumb-id="${escaped}"]`)
-    if (!el) return
+  // Smoothly glide the active focus box to the active page thumbnail and keep it comfortably in view
+  React.useLayoutEffect(() => {
+    if (!activePageId || !thumbListRef.current) {
+      setThumbFocus(null)
+      return
+    }
     const container = thumbListRef.current
-    const targetTop = Math.max(0, el.offsetTop - 8)
-    container.scrollTo({ top: targetTop, behavior: 'smooth' })
-  }, [activePageId])
+    const escaped = globalThis.CSS?.escape ? globalThis.CSS.escape(activePageId) : activePageId
+    const el = container.querySelector<HTMLElement>(`[data-thumb-id="${escaped}"]`)
+    if (!el) return
+
+    const updateFocus = () => {
+      setThumbFocus({ top: el.offsetTop, height: el.offsetHeight })
+    }
+    updateFocus()
+
+    // Smoothly keep the active thumbnail inside the visible sidebar viewport without jarring jumps
+    const viewTop = container.scrollTop
+    const viewBottom = viewTop + container.clientHeight
+    const elTop = el.offsetTop
+    const elBottom = elTop + el.offsetHeight
+    if (elTop < viewTop + 12) {
+      container.scrollTo({ top: Math.max(0, elTop - 16), behavior: 'smooth' })
+    } else if (elBottom > viewBottom - 12) {
+      container.scrollTo({ top: Math.max(0, elBottom - container.clientHeight + 16), behavior: 'smooth' })
+    }
+  }, [activePageId, doc?.pages.length])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -1311,8 +1348,82 @@ export default function WorkspaceRoute() {
         )}
       </TabsContent>
 
-      {/* Document-wide Watermark, Page Numbers, Headers/Footers */}
+      {/* Document-wide Reading Color Mode, Watermark, Page Numbers, Headers/Footers */}
       <TabsContent value="doc" className="flex-1 space-y-4 overflow-y-auto p-3 scrollbar-thin">
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <Label className="flex items-center gap-1.5">
+              {readingMode === 'normal' ? <Sun className="size-3.5 text-amber-500" /> : <Moon className="size-3.5 text-primary" />}
+              Dark Mode / Invert PDF
+            </Label>
+            {readingMode !== 'normal' && (
+              <Button variant="ghost" size="xs" onClick={() => setReadingMode('normal')}>
+                Reset
+              </Button>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {(Object.keys(PDF_READING_MODES) as PdfReadingColorMode[]).map((mode) => {
+              const cfg = PDF_READING_MODES[mode]
+              const active = readingMode === mode
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setReadingMode(mode)}
+                  className={cn(
+                    'rounded-lg border px-2.5 py-1.5 text-left text-xs transition-all',
+                    active
+                      ? 'border-primary bg-primary/10 font-semibold text-primary'
+                      : 'border-border bg-card text-muted-foreground hover:bg-secondary/50 hover:text-foreground',
+                  )}
+                >
+                  {cfg.label}
+                </button>
+              )
+            })}
+          </div>
+          <p className="text-[11px] text-muted-foreground">{PDF_READING_MODES[readingMode].description}</p>
+          {readingMode !== 'normal' && (
+            <Button
+              size="xs"
+              variant="secondary"
+              className="w-full"
+              disabled={exportingFiltered}
+              onClick={async () => {
+                if (!doc) return
+                setExportingFiltered(true)
+                try {
+                  const bytes = await exportFilteredWorkspacePdf(doc, readingMode)
+                  const outName = `${doc.name.replace(/\.pdf$/i, '')}-${readingMode}.pdf`
+                  downloadBlob(pdfBlob(bytes), outName)
+                  await addHistory({
+                    tool: 'workspace',
+                    title: `Exported ${PDF_READING_MODES[readingMode].label} PDF`,
+                    inputNames: [doc.name],
+                    outputNames: [outName],
+                    outputSize: bytes.byteLength,
+                  })
+                  toast.success(`Exported ${outName}`)
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : 'Filtered export failed')
+                } finally {
+                  setExportingFiltered(false)
+                }
+              }}
+            >
+              <Printer className="size-3.5" />
+              {exportingFiltered
+                ? 'Converting pages…'
+                : readingMode === 'invert-print'
+                  ? 'Download Print-Friendly White PDF'
+                  : `Export ${PDF_READING_MODES[readingMode].shortLabel} PDF`}
+            </Button>
+          )}
+        </div>
+
+        <Separator />
+
         <div className="space-y-2.5">
           <div className="flex items-center justify-between">
             <Label>Page numbers</Label>
@@ -1591,6 +1702,21 @@ export default function WorkspaceRoute() {
           <Button variant="ghost" size="xs" className="hidden sm:inline-flex" onClick={fitPage}>
             Fit P
           </Button>
+          <Tip label={readingMode === 'normal' ? 'Night Read / Invert PDF' : `Color Mode: ${PDF_READING_MODES[readingMode].label} (Click for Normal)`}>
+            <Button
+              variant={readingMode !== 'normal' ? 'secondary' : 'ghost'}
+              size="icon-sm"
+              className={cn(readingMode !== 'normal' && 'text-primary')}
+              onClick={() => {
+                const next: PdfReadingColorMode = readingMode === 'normal' ? 'dark' : 'normal'
+                setReadingMode(next)
+                toast.info(next === 'dark' ? 'Night Read Dark Mode enabled' : 'Restored original PDF colors')
+              }}
+              aria-label="Toggle PDF Dark Mode"
+            >
+              {readingMode === 'normal' ? <Moon className="size-4" /> : <Sun className="size-4" />}
+            </Button>
+          </Tip>
           <Tip label="Jump to page" shortcut="⌘F">
             <Button variant="ghost" size="icon-sm" onClick={() => setSearchOpen((v) => !v)}>
               <Search className="size-4" />
@@ -1727,6 +1853,17 @@ export default function WorkspaceRoute() {
             </div>
           </div>
           <div ref={thumbListRef} className="relative flex-1 space-y-2 overflow-y-auto p-2 scrollbar-thin">
+            {/* Smooth gliding active-page focus box */}
+            {thumbFocus && (
+              <div
+                aria-hidden="true"
+                style={{
+                  transform: `translateY(${thumbFocus.top}px)`,
+                  height: `${thumbFocus.height}px`,
+                }}
+                className="pointer-events-none absolute top-0 right-2 left-2 z-0 rounded-xl border-2 border-primary bg-primary/10 shadow-[0_0_0_3px_var(--ring)] transition-[transform,height,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+              />
+            )}
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <SortableContext items={doc.pages.map((p) => p.id)} strategy={verticalListSortingStrategy}>
                 {doc.pages.map((p, idx) => (
@@ -1736,6 +1873,7 @@ export default function WorkspaceRoute() {
                     index={idx}
                     active={p.id === activePage?.id}
                     selected={selectedPageIds.includes(p.id)}
+                    canvasFilter={PDF_READING_MODES[readingMode].cssFilter || undefined}
                     canDelete={doc.pages.length > 1}
                     onSelect={(e) => {
                       if (e.ctrlKey || e.metaKey || e.shiftKey) toggleSelectPage(p.id, true)
@@ -1798,6 +1936,7 @@ export default function WorkspaceRoute() {
                     zoom={zoom}
                     tool={tool}
                     toolStyle={toolStyle}
+                    canvasFilter={PDF_READING_MODES[readingMode].cssFilter || undefined}
                     selectedAnnotationId={isCurrent ? selectedAnnotationId : null}
                     onSelectAnnotation={(id) => {
                       if (p.id !== activePageId) setActivePage(p.id)

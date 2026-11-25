@@ -9,6 +9,7 @@ interface PageThumbnailProps {
   rotation?: number
   bgColor?: string
   priority?: number
+  canvasFilter?: string
   className?: string
 }
 
@@ -22,6 +23,7 @@ export const PageThumbnail = React.memo(function PageThumbnail({
   rotation = 0,
   bgColor = '#ffffff',
   priority = 20,
+  canvasFilter,
   className,
 }: PageThumbnailProps) {
   const profile = useProfile()
@@ -73,8 +75,11 @@ export const PageThumbnail = React.memo(function PageThumbnail({
     return (
       <div
         ref={hostRef}
-        className={cn('flex aspect-[1/1.414] w-full items-center justify-center rounded border text-[10px] text-muted-foreground', className)}
-        style={{ backgroundColor: bgColor }}
+        className={cn(
+          'flex aspect-[1/1.414] w-full items-center justify-center rounded-md border text-[10px] text-muted-foreground transition-[filter] duration-200',
+          className,
+        )}
+        style={{ backgroundColor: bgColor, filter: canvasFilter || undefined }}
       >
         Blank
       </div>
@@ -84,14 +89,15 @@ export const PageThumbnail = React.memo(function PageThumbnail({
   return (
     <div
       ref={hostRef}
+      style={canvasFilter ? { filter: canvasFilter } : undefined}
       className={cn(
-        'relative flex aspect-[1/1.414] w-full items-center justify-center overflow-hidden rounded border bg-white',
+        'relative flex aspect-[1/1.414] w-full items-center justify-center overflow-hidden rounded-md border border-border/60 bg-white transition-[filter] duration-200',
         className,
       )}
     >
       <canvas
         ref={canvasRef}
-        className={cn('max-h-full max-w-full object-contain transition-opacity', loaded ? 'opacity-100' : 'opacity-0')}
+        className={cn('max-h-full max-w-full object-contain transition-opacity duration-200', loaded ? 'opacity-100' : 'opacity-0')}
         style={{ transform: rotation ? `rotate(${rotation}deg)` : undefined }}
       />
       {!loaded && <div className="absolute inset-0 animate-pulse bg-secondary/70" />}

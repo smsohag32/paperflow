@@ -514,3 +514,100 @@ export async function exportWorkspacePdf(
   out.setCreator('PaperFlow AI')
   return savePdf(out)
 }
+
+export type PdfReadingColorMode = 'normal' | 'dark' | 'invert-print' | 'sepia' | 'ink-saver'
+
+export const PDF_READING_MODES: Record<
+  PdfReadingColorMode,
+  { label: string; shortLabel: string; description: string; cssFilter: string }
+> = {
+  normal: {
+    label: 'Original',
+    shortLabel: 'Normal',
+    description: 'Original document colors.',
+    cssFilter: '',
+  },
+  dark: {
+    label: 'Night Read',
+    shortLabel: 'Dark',
+    description: 'Eye-friendly dark charcoal paper with preserved image hues.',
+    cssFilter: 'invert(0.92) hue-rotate(180deg) contrast(0.96)',
+  },
+  'invert-print': {
+    label: 'Invert (Print Slides)',
+    shortLabel: 'Invert',
+    description: 'Turns black-background slides into crisp white print-friendly pages.',
+    cssFilter: 'invert(1) hue-rotate(180deg) contrast(1.06)',
+  },
+  sepia: {
+    label: 'Warm Sepia',
+    shortLabel: 'Sepia',
+    description: 'Soft warm book-paper tint for long reading sessions.',
+    cssFilter: 'sepia(0.32) brightness(0.96) contrast(0.98)',
+  },
+  'ink-saver': {
+    label: 'Ink-Saver B&W',
+    shortLabel: 'B&W',
+    description: 'High-contrast grayscale to save color ink when printing.',
+    cssFilter: 'grayscale(1) contrast(1.22) brightness(1.04)',
+  },
+}
+
+/**
+ * Export the workspace PDF with the selected visual color filter permanently baked in
+ * (ideal for converting dark-background lecture slides into print-friendly white pages).
+ */
+export async function exportFilteredWorkspacePdf(
+  doc: WorkspaceDoc,
+  mode: Exclude<PdfReadingColorMode, 'normal'>,
+  opts: { pageIds?: string[]; onProgress?: (progress: number) => void } = {},
+): Promise<Uint8Array> {
+  const baseBytes = await exportWorkspacePdf(doc, { pageIds: opts.pageIds })
+  const filterCss = PDF_READING_MODES[mode].cssFilter
+  const pdf = await openPdf(baseBytes)
+  const { PDFDocument } = await loadPdfLib()
+  const out = await PDFDocument.create()
+
+  try {
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i)
+      const baseVp = page.getViewport({ scale: 1 })
+      const scale = 2 // 144 DPI crisp print quality
+      const vp = page.getViewport({ scale })
+
+      const srcCanvas = document.createElement('canvas')
+      srcCanvas.width = Math.max(1, Math.floor(vp.width))
+      srcCanvas.height = Math.max(1, Math.floor(vp.height))
+      const sctx = srcCanvas.getContext('2d', { alpha: false })!
+      sctx.fillStyle = '#ffffff'
+      sctx.fillRect(0, 0, srcCanvas.width, srcCanvas.height)
+      await page.render({ canvas: srcCanvas, canvasContext: sctx, viewport: vp }).promise
+
+      const dstCanvas = document.createElement('canvas')
+      dstCanvas.width = srcCanvas.width
+      dstCanvas.height = srcCanvas.height
+      const dctx = dstCanvas.getContext('2d', { alpha: false })!
+      dctx.fillStyle = '#ffffff'
+      dctx.fillRect(0, 0, dstCanvas.width, dstCanvas.height)
+      dctx.filter = filterCss
+      dctx.drawImage(srcCanvas, 0, 0)
+      dctx.filter = 'none'
+
+      const blob = await new Promise<Blob>((resolve, reject) =>
+        dstCanvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Failed to encode filtered page'))), 'image/jpeg', 0.92),
+      )
+      srcCanvas.width = srcCanvas.height = 0
+      dstCanvas.width = dstCanvas.height = 0
+
+      const jpg = await out.embedJpg(new Uint8Array(await blob.arrayBuffer()))
+      const outPage = out.addPage([baseVp.width, baseVp.height])
+      outPage.drawImage(jpg, { x: 0, y: 0, width: baseVp.width, height: baseVp.height })
+      opts.onProgress?.(i / pdf.numPages)
+    }
+    out.setProducer('PaperFlow AI')
+    out.setCreator('PaperFlow AI')
+    return savePdf(out, { objectStreams: true })
+  } finally {
+    await closePdf(pdf)
+  }
+}
